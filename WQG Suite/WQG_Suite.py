@@ -1,12 +1,12 @@
 # -*- coding: cp1251 -*-
-import os, sys, pickle, configparser, subprocess
+import os, sys, pickle, configparser, subprocess, DataManager
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QProgressBar, QCompleter, QToolBar, QDialog, QFrame, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor
 from style_sheet import style_sheet
 import WSwidgets as ws
+import WSobjects as wsobj
 import sqlite3 as sql
-import DataManager
 
 i_dir = r"Files\icons"
 user_config_path = r"Files\config\user.ini"
@@ -356,45 +356,6 @@ class MainWindow(QMainWindow):
         self.goal_tree_list_widget = QListWidget()
         self.goal_tree_list_widget.setFixedWidth(475)
         self.goal_tree_list_widget.setObjectName("Tree")
-
-        if item:
-            goal_name = item.text(1)
-            goal_data = DataManager.loadMainData("goal", item.text(8))
-
-            #Получим пользовательские характеристики цели
-            custom_characts_values = []
-            custom_characts = goal_data[12]
-            if custom_characts:
-                for charact in goal_data[12].split(",").split(":"):
-                    goal_characts.append(charact[0])
-                    custom_characts_values.append(charact[1])
-
-            #Получим остальные данные
-            goal_id = goal_data[0]
-            goal_characts_values = goal_data[2:7] + custom_characts_values
-            used_skills = goal_data[7].split(",")
-            goal_state = goal_data[8]
-            images_list = goal_data[10].split(",")
-            goal_progress = goal_data[11].split(",")[0]
-            goal_image_label.setImage(images_list[0])
-
-            #Отобразим дерево цели
-            goal_tree = DataManager.getGoalTree(goal_id)
-            for goal in goal_tree:
-                if goal[1] == goal_name:
-                    isMain = True
-                else:
-                    isMain = False
-                goal_color = ws.getGoalColor(goal[3])
-                goal_tree_item = ws.GoalTreeItem(goal_id, goal_name, goal_color, goal_progress, isMain)
-                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
-                goal_tree_item.goalRenamed.connect(self.rename_goal)
-                goal_tree_item.goalDeleted.connect(self.delete_goal)
-
-                list_widget_item = QListWidgetItem()
-                list_widget_item.setSizeHint(QSize(20, 140))
-                self.goal_tree_list_widget.addItem(list_widget_item)
-                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
                 
         self.additional_images_label = ws.AdditionalImagesLabel(images_list)
         

@@ -25,7 +25,7 @@
     <Compile Include="style_sheet.py" />
     <Compile Include="Time Manager.py" />
     <Compile Include="WQG_Suite.py" />
-    <Compile Include="WSObjects.py" />
+    <Compile Include="WSobjects.py" />
     <Compile Include="WSwidgets.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
