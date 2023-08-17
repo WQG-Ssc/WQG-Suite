@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor
 from style_sheet import style_sheet
 import WSwidgets as ws
-import WSobjects as wsobj
+import WSobjects as wso
 import sqlite3 as sql
 
 i_dir = r"Files\icons"
@@ -239,8 +239,8 @@ class MainWindow(QMainWindow):
         branches = DataManager.loadMainData("branches")
         self.branch_list = []
 
-        self.list_widget = QListWidget()
-        self.list_widget.itemClicked.connect(self.goals_window)
+        self.branch_list_widget = QListWidget()
+        self.branch_list_widget.itemClicked.connect(self.goals_window)
         h_box = QHBoxLayout()
         h_box.setContentsMargins(300, 85, 250, 85)
 
@@ -252,10 +252,10 @@ class MainWindow(QMainWindow):
                 goal_branch.deleteBranch.connect(self.delete_branch)
                 goal_branch.renameBranch.connect(self.rename_branch)
                 
-                list_item = QListWidgetItem(self.list_widget)
+                list_item = QListWidgetItem(self.branch_list_widget)
                 list_item.setSizeHint(goal_branch.sizeHint())
-                self.list_widget.setItemWidget(list_item, goal_branch)
-        h_box.addWidget(self.list_widget)
+                self.branch_list_widget.setItemWidget(list_item, goal_branch)
+        h_box.addWidget(self.branch_list_widget)
 
         add_button = QPushButton()
         add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
@@ -280,9 +280,9 @@ class MainWindow(QMainWindow):
                 goal_branch.deleteBranch.connect(self.delete_branch)
                 goal_branch.renameBranch.connect(self.rename_branch)
 
-                list_item = QListWidgetItem(self.list_widget)
+                list_item = QListWidgetItem(self.branch_list_widget)
                 list_item.setSizeHint(goal_branch.sizeHint())
-                self.list_widget.setItemWidget(list_item, goal_branch)
+                self.branch_list_widget.setItemWidget(list_item, goal_branch)
             else:
                 QMessageBox.warning(self, "Warning", "Branches cannot have the same names")
 
@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
             DataManager.updateMainData("branch", new_name, branch_name)
             branch_index = self.branch_list.index(branch_name)
             self.branch_list[branch_index] = new_name
-            self.list_widget.itemWidget(self.list_widget.item(branch_index)).setText(new_name)
+            self.branch_list_widget.itemWidget(self.branch_list_widget.item(branch_index)).setText(new_name)
 
     def delete_branch(self, branch_name):
         ok = QMessageBox.question(self, "Branch deleting", "Delete branch?")
@@ -300,10 +300,10 @@ class MainWindow(QMainWindow):
             DataManager.deleteMainData("branch", branch_name)
             branch_index = self.branch_list.index(branch_name)
             self.branch_list.pop(branch_index)
-            self.list_widget.takeItem(branch_index)
+            self.branch_list_widget.takeItem(branch_index)
 
     def goals_window(self, item):
-        self.current_branch_id = self.list_widget.currentIndex().row() + 1
+        self.current_branch_id = self.branch_list_widget.currentIndex().row() + 1
 
         goals = DataManager.loadMainData("goals", self.current_branch_id)
 
@@ -347,17 +347,38 @@ class MainWindow(QMainWindow):
         goal_color = "#FFFFFF"
         goal_id = ""
         goal_state = "creating"
+        self.goals_dict = {}
 
-        branch_name = self.list_widget.itemWidget(self.list_widget.currentItem()).getText()
-
-        images_list = []
-
-        goal_image_label = ws.AddImageLabel(QSize(525, 325), shaping=False, default_image_path=i_dir + r"\Add an image....png")
         self.goal_tree_list_widget = QListWidget()
         self.goal_tree_list_widget.setFixedWidth(475)
         self.goal_tree_list_widget.setObjectName("Tree")
+
+        if item:
+            goal_id = item.text(8)
+            goal_name = item.text(1)
+            #Отобразим дерево цели
+            goal_tree = DataManager.getGoalTree(goal_id)
+            for goal in goal_tree:
+                if goal[1] == goal_name:
+                    isMain = True
+                else:
+                    isMain = False
+                color = ws.getGoalColor(goal[3])
+                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], color, goal[2].split(",")[0], isMain)
+                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
+                goal_tree_item.goalRenamed.connect(self.rename_goal)
+                goal_tree_item.goalDeleted.connect(self.delete_goal)
+
+                list_widget_item = QListWidgetItem()
+                list_widget_item.setSizeHint(QSize(20, 140))
+                self.goal_tree_list_widget.addItem(list_widget_item)
+                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
+
+        branch_name = self.branch_list_widget.itemWidget(self.branch_list_widget.currentItem()).getText()
+
+        goal_image_label = ws.AddImageLabel(QSize(525, 325), shaping=False, default_image_path=i_dir + r"\Add an image....png")
                 
-        self.additional_images_label = ws.AdditionalImagesLabel(images_list)
+        self.additional_images_label = ws.AdditionalImagesLabel()
         
         add_images_dir_button = QPushButton()
         add_images_dir_button.clicked.connect(add_images_dir_button.showMenu)
@@ -365,11 +386,6 @@ class MainWindow(QMainWindow):
         add_images_dir_button.setFixedSize(60, 60)
         add_images_dir_button.setIconSize(QSize(40, 40))
         add_images_dir_button.setObjectName("Tool")
-
-        if not goal_image_label.isImageAdded:
-            add_images_dir_button.setEnabled(False)
-            goal_image_label.imageAdded.connect(lambda: add_images_dir_button.setEnabled(True))
-        goal_image_label.imageAdded.connect(lambda: self.additional_images_label.setMainImage(goal_image_label.image_path))
 
         self.add_images_menu = QMenu()
         self.add_image_act = QAction("Add image or images")
@@ -398,8 +414,8 @@ class MainWindow(QMainWindow):
         characts_gb.setFixedWidth(262)
         characts_list_widget = QListWidget()
         characts_list_widget.setStyleSheet("QScrollBar{width: 0px}")
-        charact_edits = []
 
+        charact_edits = []
         for i in range(5): #Amount of standard goal characteristics is 5
             charact = goal_characts[i]
             charact_widget = QWidget()
@@ -416,13 +432,6 @@ class MainWindow(QMainWindow):
             if charact == "Time":
                 d_diff_indicator = ws.dDiffIndicator(goal_color)
                 h_box.addWidget(d_diff_indicator)
-            #elif i > 4:#That means the current charact is custom
-            #    remove_charact_button = QPushButton()
-            #    remove_charact_button.setIcon(QIcon(i_dir + r"\remove.png"))
-            #    remove_charact_button.setFixedSize(QSize(20, 20))
-            #    remove_charact_button.setIconSize(QSize(20, 20))
-            #    remove_charact_button.setObjectName("Tool")
-            #    h_box.addWidget(remove_charact_button)
             else:
                 h_box.addSpacing(24)
             h_box.addSpacing(20)
@@ -461,6 +470,7 @@ class MainWindow(QMainWindow):
         goal_name_edit.setPlaceholderText("Add name...")
         goal_name_edit.setFixedSize(300, 45)
         goal_name_edit.setFont(QFont('Calibri', 18))
+        goal_name_edit.textEdited.connect(self.setSaveEnabled)
 
         branch_label = QLabel("Branch: " + branch_name)
         state_label = QLabel("State: " + goal_state)
@@ -477,43 +487,30 @@ class MainWindow(QMainWindow):
         v_box.addWidget(progress_settings, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addStretch()
 
-        #Arrange goal info if the window opened as existing goal
-        if item:
-            for i in range(len(charact_edits)):
-                charact_edits[i].setText(str(goal_characts_values[i]))
-
-            #for skill in used_skills:
-            #    skill = skill.split(":")
-            #    skill_widget = QWidget()
-            #    skills_list_item = QListWidgetItem()
-            #    label = QLabel(skill[0])
-            #    p_line_edit = QLineEdit(skill[1])
-            #    h_line_edit = QLineEdit()
-            #    h_box = QHBoxLayout()
-            #    h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignLeft)
-            #    h_box.addWidget(p_line_edit, alignment=Qt.AlignmentFlag.AlignLeft)
-            #    h_box.addWidget(h_line_edit, alignment=Qt.AlignmentFlag.AlignLeft)
-            #    skills_list_item.setSizeHint(skills_list_widget.sizeHint())
-            #    skills_list_widget.setItemWidget(skills_list_item, skills_list_widget)
-
-            goal_name_edit.setText(goal_name)
-            note_text_edit.setPlainText(goal_data[9])
-            limit_date_label.setText("Progress:" + goal_data[7])
-
-        cell_list = []
-        cell_list.append(goal_name_edit)
-        cell_list.append(self.additional_images_label)
-        cell_list += charact_edits #While I haven't done object manager and custom characteristics system, it will work that way
-        cell_list.append(note_text_edit)
+        self.cell_list = [goal_image_label, goal_name_edit, self.additional_images_label, note_text_edit, limit_date_label, progress_label, state_label] + charact_edits
+        self.list_widget_list = [self.goal_tree_list_widget, characts_list_widget, skills_list_widget]
 
         self.save_button = QPushButton()
         self.save_button.setFixedSize(60, 60)
         self.save_button.setIconSize(QSize(30, 30))
         self.save_button.setIcon(QIcon(i_dir + r"\save goal.png"))
-        self.save_button.clicked.connect(lambda: self.save_goal(cell_list, goal_id))
+        self.save_button.clicked.connect(lambda: self.save_goal(goal_id))
         self.save_button.setEnabled(False)
 
         goal_image_label.imageAdded.connect(self.setSaveEnabled)
+
+        goal = wso.Goal(self.cell_list, self.list_widget_list, goal_id)
+        goal.skillCharactChanged.connect(self.setSaveEnabled)
+
+        note_text_edit.textChanged.connect(self.setSaveEnabled)#Placed here to not trigger textChanged signal when arranging goal data
+
+        if item:#This separated from the next condition because adding an image to a goal can be not necessary in futute versions
+            self.goals_dict[goal_id] = goal
+
+        if not goal_image_label.isImageAdded:
+            add_images_dir_button.setEnabled(False)
+            goal_image_label.imageAdded.connect(lambda: add_images_dir_button.setEnabled(True))
+        goal_image_label.imageAdded.connect(lambda: self.additional_images_label.setMainImage(goal_image_label.image_path))
 
         gb_h_box = QHBoxLayout()
         gb_h_box.addWidget(characts_gb)
@@ -541,11 +538,8 @@ class MainWindow(QMainWindow):
 
     def add_subgoal(self, subgoal_name, parent_id):
         subgoal_id = self.getGoalID(parent_id)
-        goal_tree_item = ws.GoalTreeItem(subgoal_id, subgoal_name, "#FFFFFF", 0, False)
-        list_widget_item = QListWidgetItem()
-        list_widget_item.setSizeHint(goal_tree_item.sizeHint())
-        self.goal_tree_list_widget.insertItem(self.goal_tree_list_widget.currentRow() + 1, list_widget_item)
-        self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
+        subgoal = wso.Goal(self.cell_list, self.list_widget_list)
+        self.goals_dict[subgoal_id] = subgoal
 
     def rename_goal(self):
         goal_name, ok = QInputDialog.getText(self, "Add subgoal", "Enter subgoal name:")
@@ -572,27 +566,38 @@ class MainWindow(QMainWindow):
             self.additional_images_label.setDir(dir_path)
             self.setSaveEnabled()
 
-    def save_goal(self, cells, goal_id):
-        #0 - name lineEdit, 1 - image list, 2-6 - characts lineEdits, 7 - note textEdit
-        goal_name = cells[0].text()
+    def save_goal(self, goal_id):
+        #1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7-11 - characts lineEdits
+        goal_name = self.cell_list[1].text()
         characts = []
-        image_list = cells[1].getImagesList()
-        for i in range(2, 7):
-            text = cells[i].text()
-            characts.append(cells[i].text())
+        image_list = self.cell_list[2].getImagesList()
+        for i in range(7, 12):
+            text = self.cell_list[i].text()
+            characts.append(self.cell_list[i].text())
 
             characts[0] = 50 #TEST
 
-        note = cells[7].toPlainText()
+        note = self.cell_list[3].toPlainText()
         if goal_name and image_list and len(characts) == 5: #Потом будет сравниваться с кол-вом характеристик
             if goal_id:#if there's already goal id means the goal exists
-                goal_data = (goal_name,) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", goal_id)
+                goal_data = (goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", goal_id)
                 DataManager.updateMainData("goal", goal_data)
             else:
                 goal_id = self.getGoalID(self.current_branch_id)
                 goal_data = (goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "")
                 DataManager.saveMainData("goal", goal_data)
+
+                goal_tree_item = ws.GoalTreeItem(goal_id, goal_name, "#FFFFFF", 0, False)
+
+                list_widget_item = QListWidgetItem()
+                list_widget_item.setSizeHint(goal_tree_item.sizeHint())
+                self.goal_tree_list_widget.insertItem(self.goal_tree_list_widget.currentRow() + 1, list_widget_item)
+                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
             self.save_button.setEnabled(False)
+            if goal_id in self.goals_dict:
+                self.goals_dict[goal_id].setData(goal_data)
+            else:
+                self.goals_dict[goal_id] = wso.Goal(self.cell_list, goal_id, self.list_widget_list)
         else:
             QMessageBox.warning(self, "Fill cells to save the goal", "Not all the required cells were filled")
 

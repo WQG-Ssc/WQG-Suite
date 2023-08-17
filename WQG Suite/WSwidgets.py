@@ -280,30 +280,29 @@ color_scale = {
 }
         
 class AdditionalImagesLabel(QLabel):
-    def __init__(self, images_list=[]):
+    def __init__(self):
         super().__init__()
-        self.images_list = images_list
+        
         self.images_from_dir = []
+        self.images_list = []
         self.directory = None
-        self.setUpLabel()
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    def setUpLabel(self):
         self.setFixedSize(60, 60)
         
         self.setStyleSheet("border: 1px solid #FFD300")
         self.setFont(QFont('Calibri', 18))
 
-        self.images_amount = 0
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self.displayImagesAmount()
+
+    def setImagesList(self, images_list):
+        self.images_list = images_list
         if len(self.images_list) > 1:
             maybe_dir = self.images_list[1].split("#")
             if maybe_dir[0] == "dir":
                 self.directory = maybe_dir[1]
                 self.images_list.pop(1)
                 self.getImagesFromDir()
-            
-        self.displayImagesAmount()
 
     def displayImagesAmount(self):
         self.images_amount = len(self.images_list) + len(self.images_from_dir)
