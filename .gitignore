@@ -364,3 +364,4 @@ FodyWeavers.xsd
 /WQG Suite/Files/data/main.db
 /WQG Suite/Files/config/time_manager/config.ini
 /WQG Suite/Files/data/main.db
+/WQG Suite/DataManager.py
