@@ -1,3 +1,4 @@
+# -*- coding: cp1251 -*-
 import DataManager
 import WSwidgets as ws
 from PyQt6.QtWidgets import QListWidgetItem, QPushButton, QLineEdit, QLabel, QHBoxLayout, QWidget
@@ -11,32 +12,35 @@ class Goal(QObject):
         self.goal_id = goal_id
         self.cell_list = cell_list
         self.list_widget_list = list_widget_list
+        self.isGoalExists = False
         self.loadData()
         self.displayData()
 
     def loadData(self):
         if self.goal_id:
             self.goal_data = DataManager.loadMainData("goal", self.goal_id)
+            self.isGoalExists = True
         #ID, name, total_difficulty, time, benefit, limit_date, priority, used_skills (,), state, note, files (,), progress (,), custom_characteristics (,:)
         else:
-            self.goal_data = ["", "", "", "", "", "", "", "", "", "", "", "", ""]
+            self.goal_data = ["", "", "", "", "", "", "", "", "", "", r"Files\icons\Add an image....png", "", ""]
             
     def displayData(self):
         #cell_list: 1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7-11 - characts lineEdits
         #list_widget_list = [self.goal_tree_list_widget, characts_list_widget, skills_list_widget]
-
         goal_name = self.goal_data[1]
         images_list = self.goal_data[10].split(",")
         self.cell_list[0].setImage(images_list[0])
         self.cell_list[2].setImagesList(images_list)
 
         self.cell_list[1].setText(self.goal_data[1])
-        self.cell_list[3].setPlainText(self.goal_data[9])
-        self.cell_list[4].setText(self.goal_data[5])
-        self.cell_list[5].setText("Progress: " + self.goal_data[11].split(",")[0])
+        note_text_edit = self.cell_list[3]
+        note_text_edit.blockSignals(True)
+        note_text_edit.setPlainText(self.goal_data[9])#Change textEdit's text without triggering textChanged signal
+        note_text_edit.blockSignals(False)
+        self.cell_list[4].setText("Progress: " + self.goal_data[11].split(",")[0])
 
         #ќтобразим значени€ стандартных характеристик
-        characts_edits = self.cell_list[7:12]
+        characts_edits = self.cell_list[6:11]
         standard_characts_values = self.goal_data[2:7]
         for i in range(5):
             characts_edits[i].setText(str(standard_characts_values[i]))
@@ -89,3 +93,4 @@ class Goal(QObject):
 
     def setData(self, goal_data):
         self.goal_data = goal_data
+        self.isGoalExists = True

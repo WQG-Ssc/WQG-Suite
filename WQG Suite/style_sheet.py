@@ -67,11 +67,25 @@ QGroupBox::title{
     color: #FFD300
     }
 QMenu{
-    color: #ffd300
+    color: #FFD300
     }
 QMenu::item:selected{
     background-color: #7F6900
     }
 QGridBox{
     border: 1px solid #FFFFFF;
-    }"""
+    }
+QDateEdit{
+    color: #FFD300;
+    border: 1px solid #FFD300
+    }
+QDateEdit::down-button:pressed{
+    background-color: #7F6900
+    }
+QDateEdit::up-button:pressed{
+    background-color: #7F6900
+    }
+QCalendarView{
+  background-color:  #FFFFFF;
+    }
+"""

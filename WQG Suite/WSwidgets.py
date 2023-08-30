@@ -1,9 +1,9 @@
 # -*- coding: cp1251 -*-
 import os, sys
 import DataManager
-from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem
+from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
-from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal
+from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate
 
 class AddImageLabel(QLabel):
     imageAdded = pyqtSignal()
@@ -208,12 +208,17 @@ def getGoalImage(image_path, goal_progress, d_diff):
     return template
 
 class dDiffIndicator(QLabel):
-    def __init__(self, color):
+    def __init__(self):
         super().__init__()
         self.template = QPixmap(r"Files\icons\diff indicator template.png")
-        self.paintWidget(color)
 
-    def paintWidget(self, color):
+    def updateColor(self, text):
+        if text:
+            d_diff = float(text)
+        else:
+            d_diff = 0
+        color = getGoalColor(d_diff)
+
         painter = QPainter()
         painter.begin(self.template)
         pen = QPen(QColor(color), 1, Qt.PenStyle.SolidLine)
@@ -226,24 +231,32 @@ class dDiffIndicator(QLabel):
         self.setPixmap(self.template)
 
 class GoalProgressBar(QProgressBar):
-    def __init__(self, goal_progress, color, main):
+    def __init__(self, d_diff, goal_progress, isMain):
         super().__init__()
         self.goal_progress = goal_progress
-        self.color = color
+        self.d_diff = d_diff
+        
+        self.isMain = isMain
         self.setOrientation(Qt.Orientation.Vertical)
         self.setTextVisible(False)
-        if main:
+        if self.isMain:
             self.setFixedSize(14, 85)
         else:
             self.setFixedSize(14, 65)
         self.setUpProgressBar()
 
     def setUpProgressBar(self):
-        self.setStyleSheet("QProgressBar::chunk{background-color:" + self.color + ";}")
+        color = getGoalColor(self.d_diff)
+        self.setStyleSheet("QProgressBar::chunk{background-color:" + color + "}")
         self.setValue(int(self.goal_progress))
 
+    def updateGoalProgressBar(self, goal_progress, d_diff):
+        self.goal_progress = goal_progress
+        self.d_diff = d_diff
+        self.setUpProgressBar()
+
 def getGoalColor(d_diff):
-    previous_key = 0
+    previous_key = -1
     keys = color_scale.keys()
     if d_diff > 1200:
         color_key = 1201
@@ -280,11 +293,12 @@ color_scale = {
 }
         
 class AdditionalImagesLabel(QLabel):
+    imageRemoved = pyqtSignal()
     def __init__(self):
         super().__init__()
         
-        self.images_from_dir = []
         self.images_list = []
+        self.images_from_dir = []
         self.directory = None
         self.setFixedSize(60, 60)
         
@@ -293,16 +307,16 @@ class AdditionalImagesLabel(QLabel):
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.displayImagesAmount()
-
     def setImagesList(self, images_list):
         self.images_list = images_list
+        self.images_from_dir = []
         if len(self.images_list) > 1:
             maybe_dir = self.images_list[1].split("#")
             if maybe_dir[0] == "dir":
                 self.directory = maybe_dir[1]
                 self.images_list.pop(1)
                 self.getImagesFromDir()
+        self.displayImagesAmount()
 
     def displayImagesAmount(self):
         self.images_amount = len(self.images_list) + len(self.images_from_dir)
@@ -330,16 +344,16 @@ class AdditionalImagesLabel(QLabel):
             self.images_list.append(image)
 
     def setDir(self, dir_path):
-        self.images_from_dir = []
         self.directory = dir_path
         self.getImagesFromDir()
         self.displayImagesAmount()
 
     def getImagesFromDir(self):
+        self.images_from_dir = []
         file_list = os.listdir(self.directory)
 
         for file in file_list:
-            if file.endswith(".png") or file.endswith(".jpg") or file.endswith(".jpeg"):
+            if file.endswith(".png") or file.endswith(".jpg"):
                 self.images_from_dir.append(file)
 
     def removeDir(self):
@@ -349,6 +363,7 @@ class AdditionalImagesLabel(QLabel):
 
     def image_removed(self, image_index):
         self.images_list.pop(image_index)
+        self.imageRemoved.emit()
         self.displayImagesAmount()
 
     def mousePressEvent(self, event):
@@ -393,7 +408,7 @@ class AddtionalImagesWindow(QWidget):
         self.remove_button.setIcon(QIcon(r"Files\icons\remove.png"))
         self.remove_button.clicked.connect(self.remove_image)
         self.remove_button.setObjectName("Tool")
-        self.remove_button.setFixedSize(QSize(20, 20))
+        self.remove_button.setFixedSize(QSize(16, 16))
 
         button_h_box = QHBoxLayout()
         button_h_box.addStretch()
@@ -403,8 +418,7 @@ class AddtionalImagesWindow(QWidget):
         button_h_box.addWidget(self.next_button)
         button_h_box.addStretch()
         button_h_box.addWidget(self.remove_button)
-        
-        
+
         main_v_box = QVBoxLayout()
         main_v_box.addWidget(self.image_label)
         main_v_box.addLayout(button_h_box)
@@ -454,83 +468,110 @@ class AddtionalImagesWindow(QWidget):
         self.all_images_amount -= 1
         self.non_dir_images_amount -= 1
         self.count_label.setText(f"{self.current_image_index}/{self.all_images_amount}")
+        if self.all_images_amount == 1:
+            self.next_button.setEnabled(False)
+            self.previous_button.setEnabled(False)
         self.previous_image()
         
     def resizeEvent(self, event):
         self.image_label.setPixmap(self.scaleImage(self.image))
 
 class GoalTreeItem(QWidget):
-    subgoalAdded = pyqtSignal(str, str)
-    goalRenamed = pyqtSignal(str)
+    subgoalAdded = pyqtSignal(str)
     goalDeleted = pyqtSignal(str)
-    def __init__(self, goal_id, goal_name, goal_color, goal_progress, isMain):
+    def __init__(self, goal_id, goal_name, d_diff, goal_progress, isMain):
         super().__init__()
         self.goal_id = goal_id
         self.goal_name = goal_name
-        self.goal_color = goal_color
+        self.d_diff = d_diff
         self.goal_progress = goal_progress
         self.isMain = isMain
         self.arrangeWidgets()
         self.add_act = QAction("Add subgoal")
         self.add_act.triggered.connect(self.add_subgoal)
-        self.rename_act = QAction("Rename goal")
-        self.rename_act.triggered.connect(self.rename_goal)
         self.delete_act = QAction("Delete goal")
         self.delete_act.triggered.connect(self.delete_goal)
 
     def arrangeWidgets(self):
-        label = QLabel(self.goal_id + " " + self.goal_name)
-        label.setFont(QFont("Calibri", 30))
-        icon = GoalProgressBar(self.goal_progress, self.goal_color, self.isMain)
+        self.label = QLabel(self.goal_id + " " + self.goal_name)
+        self.label.setFont(QFont("Calibri", 30))
+        self.icon = GoalProgressBar(self.d_diff, self.goal_progress, self.isMain)
 
         h_box = QHBoxLayout()
-        h_box.addWidget(label)
+        h_box.addWidget(self.label)
         h_box.addStretch()
-        h_box.addWidget(icon)
+        h_box.addWidget(self.icon)
         self.setLayout(h_box)
 
     def add_subgoal(self):
-        subgoal_name, _ = QInputDialog.getText(self, "Add subgoal", "Enter subgoal name:")
-        if subgoal_name:
-            self.subgoalAdded.emit(subgoal_name, self.goal_id)
-
-    def rename_goal(self):
-        goal_name, _ = QInputDialog.getText(self, "Add subgoal", "Enter subgoal name:")
-        if goal_name:
-            self.goal_name = goal_name
-            self.goalRenamed.emit(goal_name)
+        self.subgoalAdded.emit(self.goal_id)
 
     def delete_goal(self):
         if QMessageBox.question(self, "Delete goal", "Do you want to delete this goal?") == QMessageBox.StandardButton.Yes:
-            self.goalDeleted.emit(self.goal_name)
+            self.goalDeleted.emit(self.goal_id)
+
+    def updateWidget(self, goal_id, goal_name, d_diff, goal_progress):
+        self.goal_id = goal_id
+        self.goal_name = goal_name
+        self.d_diff = d_diff
+        self.goal_progress = goal_progress
+        self.label.setText(self.goal_id + " " + self.goal_name)
+        self.icon.updateGoalProgressBar(self.goal_progress, self.d_diff)
 
     def contextMenuEvent(self, event):
         menu = QMenu()
         menu.addAction(self.add_act)
-        menu.addAction(self.rename_act)
         menu.addAction(self.delete_act)
         menu.exec(self.mapToGlobal(event.pos()))
 
-#class TreeWidgetItem(QTreeWidgetItem):
-#    def __init__(self):
-#        super().__init__()
-#        self.rename_act = QAction("Rename goal")
-#        self.rename_act.triggered.connect(self.rename_branch)
-#        self.delete_act = QAction("Delete goal")
-#        self.delete_act.triggered.connect(self.delete_branch)
+class DateEditTool(QWidget):
+    dateChanged = pyqtSignal()
+    def __init__(self):
+        super().__init__()
+        self.current_date = QDate.currentDate()
+        self.date = self.current_date
 
-#    def rename_goal(self):
-#        new_name = QInputDialog.getText(self, "Goal renaming", "Enter new name of the goal:")
-#        DataManager.deleteMainData("goal", new_name, self.goal_name)
+        self.date_edit = QDateEdit(self.date)
+        self.date_edit.userDateChanged.connect(self.change_selected_date)
+        calendar_button = QPushButton()
+        calendar_button.setIcon(QIcon(r"Files\icons\calendar.png"))
+        calendar_button.setFixedSize(18, 18)
+        calendar_button.clicked.connect(self.show_calendar)
+        h_box = QHBoxLayout()
+        h_box.addWidget(self.date_edit)
+        h_box.addWidget(calendar_button)
+        self.setLayout(h_box)
 
-#    def delete_goal(self):
-#        ok = QMessageBox.question(self, "Goal deleting", "Delete goal?")
-#        if ok == QMessageBox.StandardButton.Yes:
-#            DataManager.deleteMainData("goal", self.branch_name)
+    def show_calendar(self):
+        self.dialog = QDialog()
+        self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.dialog.setModal(True)
+        calendar = QCalendarWidget()
+        calendar.setSelectedDate(self.date)
+        calendar.clicked.connect(self.close_calendar)
+        v_box = QVBoxLayout()
+        v_box.addWidget(calendar)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
 
-#    def contextMenuEvent(self, event):
-#        menu = QMenu()
-#        menu.addAction(self.rename_act)
-#        menu.addAction(self.delete_act)
+    def close_calendar(self, date):
+        self.dialog.close()
+        self.date_edit.setDate(date)
+        self.date = date
 
-#        action = menu.exec(self.mapToGlobal(event.pos()))
+    def change_selected_date(self, date):
+        self.date = date
+        self.dateChanged.emit()
+
+    def text(self):
+        return self.date.toString("dd/MM/yyyy")
+
+    def setText(self, date: str):
+        date = QDate.fromString(date, "dd/MM/yyyy")
+        if date:
+            self.date = date
+            self.date_edit.blockSignals(True)
+            self.date_edit.setDate(date)
+            self.date_edit.blockSignals(False)
+        else:
+            date = self.current_date

@@ -1,11 +1,12 @@
 # -*- coding: cp1251 -*-
+import calendar
 import os, sys, pickle, configparser, subprocess, DataManager
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QProgressBar, QCompleter, QToolBar, QDialog, QFrame, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize
-from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QProgressBar, QCompleter, QToolBar, QDialog, QFrame, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
+from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression
+from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
 from style_sheet import style_sheet
 import WSwidgets as ws
-import WSobjects as wso
+import WSobjects as wsobj
 import sqlite3 as sql
 
 i_dir = r"Files\icons"
@@ -136,7 +137,34 @@ class MainWindow(QMainWindow):
                 self.main_menu()
             else: QMessageBox.warning(self, 'Invalid password', 'Invalid password')
 
+    def check_account_entry(self): #Проверяет, вся ли информация аккаунта введена
+        self.user_name = self.name_edit.text()
+        self.user_password = self.password_edit.text()
+        if self.user_name and self.user_password:
+            self.save_account()
+        else:
+            QMessageBox.warning(self, 'Empty fields', 'Enter all user information')
+
+    def save_account(self): #Создаёт файл настроек
+        config = configparser.ConfigParser()
+        config.add_section("User")
+        config.set("User", "Name", self.user_name)
+        config.set("User", "Password", self.user_password)
+
+        with open(user_config_path, "w") as config_file:
+            config.write(config_file)
+
+        image = self.profile_image_label.pixmap()
+        image.save(r"Files/icons/User/Profile_picture.png")
+
+        self.main_menu()
+
     def main_menu(self):
+        self.previous_window_act = QAction()
+        self.previous_window_act.triggered.connect(self.previous_window)
+        self.previous_window_act.setShortcut("Esc")
+        self.addAction(self.previous_window_act)
+
         statistics_button = QPushButton()
         statistics_button.setIcon(QIcon(i_dir + r"\Statistics.png"))
         statistics_button.setFixedSize(205, 110)
@@ -190,6 +218,10 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(container)
         self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
 
+    def previous_window(self):
+        if self.stacked_widget.currentIndex() > 0:
+            self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
+
     def create_toolbar(self):
         self.toggle_toolbar_act = QAction()
         self.toggle_toolbar_act.triggered.connect(self.toggle_toolbar)
@@ -234,6 +266,31 @@ class MainWindow(QMainWindow):
         self.tool_bar.setMovable(False)
 
         self.addToolBar(Qt.ToolBarArea.RightToolBarArea, self.tool_bar)
+
+    def launch_time_manager(self):
+        time_manager = subprocess.Popen(r"WS Time Manager.exe")
+
+    def toggle_toolbar(self):
+        if self.tool_bar.isVisible():
+            self.tool_bar.hide()
+        else:
+            self.tool_bar.show()
+
+    def settings(self):
+        self.dialog = QDialog()
+        about_button = QPushButton("About")
+        v_box = QVBoxLayout()
+        v_box.addWidget(about_button)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
+
+    def notes(self):
+        self.dialog = QDialog()
+        label = QLabel("In process")
+        v_box = QVBoxLayout()
+        v_box.addWidget(label)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
 
     def goal_branches_window(self):
         branches = DataManager.loadMainData("branches")
@@ -289,7 +346,7 @@ class MainWindow(QMainWindow):
     def rename_branch(self, branch_name):
         new_name, _ = QInputDialog.getText(self, "Branch renaming", "Enter new name of the branch:")
         if new_name:
-            DataManager.updateMainData("branch", new_name, branch_name)
+            DataManager.updateMainData("branch", [new_name, branch_name])
             branch_index = self.branch_list.index(branch_name)
             self.branch_list[branch_index] = new_name
             self.branch_list_widget.itemWidget(self.branch_list_widget.item(branch_index)).setText(new_name)
@@ -303,7 +360,7 @@ class MainWindow(QMainWindow):
             self.branch_list_widget.takeItem(branch_index)
 
     def goals_window(self, item):
-        self.current_branch_id = self.branch_list_widget.currentIndex().row() + 1
+        self.current_branch_id = str(self.branch_list_widget.currentIndex().row() + 1)
 
         goals = DataManager.loadMainData("goals", self.current_branch_id)
 
@@ -311,7 +368,8 @@ class MainWindow(QMainWindow):
         tree_widget.setColumnWidth(0, 135)
         tree_widget.setIconSize(QSize(97, 97))
         tree_widget.setColumnCount(9)
-        tree_widget.setHeaderLabels(["", "Name", "Total difficulty", "Hours", "Benefit", "limit date", "Priority", "State", "ID"])
+        headers = ["", "Name", "Total difficulty", "Hours", "Benefit", "limit date", "Priority", "State", "ID"]
+        tree_widget.setHeaderLabels(headers)
         tree_widget.itemClicked.connect(self.goal_window)
 
         for i in range(len(goals)):
@@ -319,11 +377,14 @@ class MainWindow(QMainWindow):
             goal_info_str = list(str(item) for item in goal_info)#Преобразуем все значения в строковой тип
 
             goal_item = QTreeWidgetItem(tree_widget, [""] + goal_info_str[:8])
+            goal_item.setSizeHint(1, QSize(100, 120))
             goal_item.setFont(1, QFont("Calibri", 18, 700))
             for i in range(2, 9):#Потом последние значение будет получатся по кол-ву характеристик
                 goal_item.setFont(i, QFont("Calibri", 18))
             goal_item.setIcon(0, QIcon(ws.getGoalImage(goal_info[8].split(",")[0], goal_info[9].split(":")[0], goal_info[2]))) #Так мы получаем первое изображение из списка путей, которое является главным
             tree_widget.addTopLevelItem(goal_item)
+        
+        tree_widget.resizeColumnToContents(5)
 
         h_box = QHBoxLayout()
         h_box.setContentsMargins(300, 85, 250, 85)
@@ -344,41 +405,20 @@ class MainWindow(QMainWindow):
 
     def goal_window(self, item=None):
         goal_characts = ["Total difficulty:", "Time:", "Benefit:", "Limit date:", "Priority:"]
-        goal_color = "#FFFFFF"
-        goal_id = ""
         goal_state = "creating"
+        self.areChangesMade = False
         self.goals_dict = {}
 
         self.goal_tree_list_widget = QListWidget()
         self.goal_tree_list_widget.setFixedWidth(475)
         self.goal_tree_list_widget.setObjectName("Tree")
 
-        if item:
-            goal_id = item.text(8)
-            goal_name = item.text(1)
-            #Отобразим дерево цели
-            goal_tree = DataManager.getGoalTree(goal_id)
-            for goal in goal_tree:
-                if goal[1] == goal_name:
-                    isMain = True
-                else:
-                    isMain = False
-                color = ws.getGoalColor(goal[3])
-                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], color, goal[2].split(",")[0], isMain)
-                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
-                goal_tree_item.goalRenamed.connect(self.rename_goal)
-                goal_tree_item.goalDeleted.connect(self.delete_goal)
-
-                list_widget_item = QListWidgetItem()
-                list_widget_item.setSizeHint(QSize(20, 140))
-                self.goal_tree_list_widget.addItem(list_widget_item)
-                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
-
         branch_name = self.branch_list_widget.itemWidget(self.branch_list_widget.currentItem()).getText()
 
         goal_image_label = ws.AddImageLabel(QSize(525, 325), shaping=False, default_image_path=i_dir + r"\Add an image....png")
                 
         self.additional_images_label = ws.AdditionalImagesLabel()
+        self.additional_images_label.imageRemoved.connect(self.setSaveEnabled)
         
         add_images_dir_button = QPushButton()
         add_images_dir_button.clicked.connect(add_images_dir_button.showMenu)
@@ -416,6 +456,7 @@ class MainWindow(QMainWindow):
         characts_list_widget.setStyleSheet("QScrollBar{width: 0px}")
 
         charact_edits = []
+
         for i in range(5): #Amount of standard goal characteristics is 5
             charact = goal_characts[i]
             charact_widget = QWidget()
@@ -424,14 +465,27 @@ class MainWindow(QMainWindow):
             label = QLabel(charact)
             if charact == "Total difficulty:":
                 line_edit = QLabel()
+            elif charact == "Limit date:":
+                line_edit = ws.DateEditTool()
+                line_edit.dateChanged.connect(self.setSaveEnabled)
+            elif charact == "Priority:":
+                line_edit = QLineEdit()
+                regex = QRegularExpression("^[A-E]$")
+                validator = QRegularExpressionValidator(regex)
+                line_edit.setValidator(validator)
+                line_edit.textEdited.connect(self.setSaveEnabled)
             else:
                 line_edit = QLineEdit()
+                regex = QRegularExpression("^\d*\.?\d+$")
+                validator = QRegularExpressionValidator(regex)
+                line_edit.setValidator(validator)
                 line_edit.textEdited.connect(self.setSaveEnabled)
             h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignLeft)
             h_box.addWidget(line_edit, alignment=Qt.AlignmentFlag.AlignRight)
-            if charact == "Time":
-                d_diff_indicator = ws.dDiffIndicator(goal_color)
-                h_box.addWidget(d_diff_indicator)
+            if charact == "Time:":
+                self.d_diff_indicator = ws.dDiffIndicator()
+                line_edit.textChanged.connect(self.update_goal_indicator)
+                h_box.addWidget(self.d_diff_indicator)
             else:
                 h_box.addSpacing(24)
             h_box.addSpacing(20)
@@ -465,6 +519,7 @@ class MainWindow(QMainWindow):
         note_text_edit.setPlaceholderText("Add note...")
         note_text_edit.setFixedWidth(1000)
         note_text_edit.setStyleSheet("color: white")
+        note_text_edit.textChanged.connect(self.setSaveEnabled)
 
         goal_name_edit = QLineEdit()
         goal_name_edit.setPlaceholderText("Add name...")
@@ -474,7 +529,6 @@ class MainWindow(QMainWindow):
 
         branch_label = QLabel("Branch: " + branch_name)
         state_label = QLabel("State: " + goal_state)
-        limit_date_label = QLabel("Limit date: ")
         progress_label = QLabel("Progress: ")
         progress_settings = QPushButton("...")
         progress_settings.setFixedSize(12, 12)
@@ -487,25 +541,44 @@ class MainWindow(QMainWindow):
         v_box.addWidget(progress_settings, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addStretch()
 
-        self.cell_list = [goal_image_label, goal_name_edit, self.additional_images_label, note_text_edit, limit_date_label, progress_label, state_label] + charact_edits
+        self.cell_list = [goal_image_label, goal_name_edit, self.additional_images_label, note_text_edit, progress_label, state_label] + charact_edits
         self.list_widget_list = [self.goal_tree_list_widget, characts_list_widget, skills_list_widget]
 
         self.save_button = QPushButton()
         self.save_button.setFixedSize(60, 60)
         self.save_button.setIconSize(QSize(30, 30))
         self.save_button.setIcon(QIcon(i_dir + r"\save goal.png"))
-        self.save_button.clicked.connect(lambda: self.save_goal(goal_id))
+        self.save_button.clicked.connect(self.save_goal)
         self.save_button.setEnabled(False)
 
+        self.id_list = []
+        if item:
+            goal_id = item.text(8)
+            goal_name = item.text(1)
+            #Отобразим дерево цели
+            goal_tree = DataManager.getGoalTree(goal_id)
+            for goal in goal_tree:
+                self.id_list.append(goal[0])
+                if goal[1] == goal_name:
+                    isMain = True
+                else:
+                    isMain = False
+                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], goal[2].split(",")[0], isMain)
+                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
+                goal_tree_item.goalDeleted.connect(self.delete_goal)
+
+                list_widget_item = QListWidgetItem()
+                size_hint = goal_tree_item.sizeHint()
+                list_widget_item.setSizeHint(QSize(size_hint.width(), size_hint.height() + 35))
+                self.goal_tree_list_widget.addItem(list_widget_item)
+                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
+        else:
+            self.add_subgoal(self.current_branch_id)
+
+        self.goal_tree_list_widget.currentItemChanged.connect(self.display_goal)
+        self.goal_tree_list_widget.setCurrentRow(0)
+
         goal_image_label.imageAdded.connect(self.setSaveEnabled)
-
-        goal = wso.Goal(self.cell_list, self.list_widget_list, goal_id)
-        goal.skillCharactChanged.connect(self.setSaveEnabled)
-
-        note_text_edit.textChanged.connect(self.setSaveEnabled)#Placed here to not trigger textChanged signal when arranging goal data
-
-        if item:#This separated from the next condition because adding an image to a goal can be not necessary in futute versions
-            self.goals_dict[goal_id] = goal
 
         if not goal_image_label.isImageAdded:
             add_images_dir_button.setEnabled(False)
@@ -536,23 +609,39 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(container)
         self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() + 1)
 
-    def add_subgoal(self, subgoal_name, parent_id):
-        subgoal_id = self.getGoalID(parent_id)
-        subgoal = wso.Goal(self.cell_list, self.list_widget_list)
-        self.goals_dict[subgoal_id] = subgoal
+    def update_goal_indicator(self, text):
+        self.d_diff_indicator.updateColor(text)
 
-    def rename_goal(self):
-        goal_name, ok = QInputDialog.getText(self, "Add subgoal", "Enter subgoal name:")
-        if ok:
-            self.goal_name = goal_name
-            self.goalRenamed.emit(goal_name)
+    def display_goal(self, current_item, previous):
+        if self.areChangesMade and QMessageBox.question(self, "Unsaved changes", "Some changes are made. Do you want to save them?") == QMessageBox.StandardButton.Yes:
+            self.save_goal(previous)
+        self.areChangesMade = False
+        self.current_goal_id = self.goal_tree_list_widget.itemWidget(current_item).goal_id
+        if self.current_goal_id in self.goals_dict:
+            self.goals_dict[self.current_goal_id].displayData()
+        else:
+            goal = wsobj.Goal(self.cell_list, self.list_widget_list, self.current_goal_id)
+            goal.skillCharactChanged.connect(self.setSaveEnabled)
+            self.goals_dict[self.current_goal_id] = goal
 
-    def delete_goal(self):
-        if QMessageBox.question(self, "Delete goal", "Do you want to delete this goal?") == QMessageBox.StandardButton.Yes:
-            self.goalDeleted.emit(self.goal_name)
+    def add_subgoal(self, parent_id):
+        subgoal = wsobj.Goal(self.cell_list, self.list_widget_list)
+        self.current_goal_id = self.getGoalID(parent_id)
+        self.goals_dict[self.current_goal_id] = subgoal
+        self.id_list.append(self.current_goal_id)
+
+    def delete_goal(self, goal_id):
+        DataManager.deleteMainData("goal", goal_id)
+        self.id_list.remove(goal_id)
+        if not self.id_list:
+            self.goal_tree_list_widget.currentItemChanged.disconnect()#This will be done in this way while window system isn't ready
+            self.previous_window()
+        self.goals_dict.pop(goal_id)
+        self.goal_tree_list_widget.takeItem(self.goal_tree_list_widget.currentRow())
 
     def setSaveEnabled(self):
         self.save_button.setEnabled(True)
+        self.areChangesMade = True
 
     def add_image(self):
         image_path, _ = QFileDialog.getOpenFileNames(self, "Choose image of images", filter="Image Files (*.png *.jpg *.bmp)")
@@ -566,38 +655,50 @@ class MainWindow(QMainWindow):
             self.additional_images_label.setDir(dir_path)
             self.setSaveEnabled()
 
-    def save_goal(self, goal_id):
+    def save_goal(self, previous=None):
         #1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7-11 - characts lineEdits
         goal_name = self.cell_list[1].text()
         characts = []
         image_list = self.cell_list[2].getImagesList()
-        for i in range(7, 12):
+        for i in range(6, 11):
             text = self.cell_list[i].text()
             characts.append(self.cell_list[i].text())
 
             characts[0] = 50 #TEST
 
         note = self.cell_list[3].toPlainText()
-        if goal_name and image_list and len(characts) == 5: #Потом будет сравниваться с кол-вом характеристик
-            if goal_id:#if there's already goal id means the goal exists
-                goal_data = (goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", goal_id)
+        if goal_name and len(characts) == 5: #Потом будет сравниваться с кол-вом характеристик
+            if self.goals_dict[self.current_goal_id].isGoalExists:
+                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", self.current_goal_id)
                 DataManager.updateMainData("goal", goal_data)
+                if previous:
+                    current_widget = self.goal_tree_list_widget.itemWidget(previous)
+                else:
+                    current_widget = self.goal_tree_list_widget.itemWidget(self.goal_tree_list_widget.currentItem())
+                current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[3]), goal_data[11].split(",")[0])
             else:
-                goal_id = self.getGoalID(self.current_branch_id)
-                goal_data = (goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "")
+                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "")
                 DataManager.saveMainData("goal", goal_data)
 
-                goal_tree_item = ws.GoalTreeItem(goal_id, goal_name, "#FFFFFF", 0, False)
+                self.id_list.sort()
+                goal_index = self.id_list.index(self.current_goal_id)
+                if goal_index == 0:
+                    isMain = True
+                else:
+                    isMain = False
+                goal_tree_item = ws.GoalTreeItem(self.current_goal_id, goal_name, float(goal_data[3]), 0, isMain)
+                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
+                goal_tree_item.goalDeleted.connect(self.delete_goal)
 
                 list_widget_item = QListWidgetItem()
-                list_widget_item.setSizeHint(goal_tree_item.sizeHint())
-                self.goal_tree_list_widget.insertItem(self.goal_tree_list_widget.currentRow() + 1, list_widget_item)
+                size_hint = goal_tree_item.sizeHint()
+                list_widget_item.setSizeHint(QSize(size_hint.width(), size_hint.height() + 35))
+
+                self.goal_tree_list_widget.insertItem(goal_index, list_widget_item)
                 self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
             self.save_button.setEnabled(False)
-            if goal_id in self.goals_dict:
-                self.goals_dict[goal_id].setData(goal_data)
-            else:
-                self.goals_dict[goal_id] = wso.Goal(self.cell_list, goal_id, self.list_widget_list)
+            self.areChangesMade = False
+            self.goals_dict[self.current_goal_id].setData(goal_data)
         else:
             QMessageBox.warning(self, "Fill cells to save the goal", "Not all the required cells were filled")
 
@@ -611,31 +712,6 @@ class MainWindow(QMainWindow):
             if len(idl) == depth:
                 level_len += 1
         return f"{parent_id}.{level_len + 1}"
-
-    def launch_time_manager(self):
-        time_manager = subprocess.Popen(r"WS Time Manager.exe")
-
-    def toggle_toolbar(self):
-        if self.tool_bar.isVisible():
-            self.tool_bar.hide()
-        else:
-            self.tool_bar.show()
-
-    def settings(self):
-        self.dialog = QDialog()
-        about_button = QPushButton("About")
-        v_box = QVBoxLayout()
-        v_box.addWidget(about_button)
-        self.dialog.setLayout(v_box)
-        self.dialog.show()
-
-    def notes(self):
-        self.dialog = QDialog()
-        label = QLabel("In process")
-        v_box = QVBoxLayout()
-        v_box.addWidget(label)
-        self.dialog.setLayout(v_box)
-        self.dialog.show()
 
     def create_account(self):
         image = QLabel()
@@ -684,28 +760,6 @@ class MainWindow(QMainWindow):
         container.setLayout(v_box)
         self.stacked_widget.addWidget(container)
         self.stacked_widget.setCurrentIndex(0)
-
-    def check_account_entry(self): #Проверяет, вся ли информация аккаунта введена
-        self.user_name = self.name_edit.text()
-        self.user_password = self.password_edit.text()
-        if self.user_name and self.user_password:
-            self.save_account()
-        else:
-            QMessageBox.warning(self, 'Empty fields', 'Enter all user information')
-
-    def save_account(self): #Создаёт файл настроек
-        config = configparser.ConfigParser()
-        config.add_section("User")
-        config.set("User", "Name", self.user_name)
-        config.set("User", "Password", self.user_password)
-
-        with open(user_config_path, "w") as config_file:
-            config.write(config_file)
-
-        image = self.profile_image_label.pixmap()
-        image.save(r"Files/icons/User/Profile_picture.png")
-
-        self.main_menu()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

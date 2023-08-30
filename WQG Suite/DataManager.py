@@ -23,7 +23,7 @@ def loadMainData(data_type, *args):
         return branches
 
     if data_type == "goals":
-        cur.execute(f"SELECT name, total_difficulty, time, benefit, limit_date, priority, state, ID, files, progress, custom_characteristics FROM Goals WHERE ID LIKE '{args[0]}.%'")
+        cur.execute(f"SELECT name, total_difficulty, time, benefit, limit_date, priority, state, ID, files, progress, custom_characteristics FROM Goals WHERE ID LIKE '{args[0]}.%' ORDER BY ID")
         goals = cur.fetchall()
         conn.close()
         return goals
@@ -61,7 +61,9 @@ def deleteMainData(data_type, *args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
-        cur.execute("DELETE FROM Branches WHERE name = ?", args)
+        cur.execute("DELETE FROM Branches WHERE name == ?", args)
+    if data_type == "goal":
+        cur.execute("DELETE FROM Goals WHERE ID == ?", args)
     conn.commit()
     conn.close()
 
