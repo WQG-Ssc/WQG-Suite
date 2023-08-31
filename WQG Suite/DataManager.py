@@ -52,6 +52,7 @@ def updateMainData(data_type, args):
     if data_type == "branch":
         cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
     if data_type == "goal":
+        print(args)
         cur.execute("UPDATE Goals SET ID = ?, name = ?, total_difficulty = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ? WHERE ID == ?", args)
     conn.commit()
     conn.close()

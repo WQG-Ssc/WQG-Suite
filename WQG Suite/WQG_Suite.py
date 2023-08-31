@@ -530,15 +530,16 @@ class MainWindow(QMainWindow):
         branch_label = QLabel("Branch: " + branch_name)
         state_label = QLabel("State: " + goal_state)
         progress_label = QLabel("Progress: ")
-        progress_settings = QPushButton("...")
-        progress_settings.setFixedSize(12, 12)
+        other_settings = QPushButton("...")
+        other_settings.clicked.connect(self.goal_settings)
+        other_settings.setFixedSize(12, 12)
 
         v_box = QVBoxLayout()
         v_box.addWidget(goal_name_edit, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addWidget(branch_label, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addWidget(state_label, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addWidget(progress_label, alignment=Qt.AlignmentFlag.AlignLeft)
-        v_box.addWidget(progress_settings, alignment=Qt.AlignmentFlag.AlignLeft)
+        v_box.addWidget(other_settings, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addStretch()
 
         self.cell_list = [goal_image_label, goal_name_edit, self.additional_images_label, note_text_edit, progress_label, state_label] + charact_edits
@@ -574,6 +575,7 @@ class MainWindow(QMainWindow):
                 self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
         else:
             self.add_subgoal(self.current_branch_id)
+            self.old_goal_id = self.current_goal_id
 
         self.goal_tree_list_widget.currentItemChanged.connect(self.display_goal)
         self.goal_tree_list_widget.setCurrentRow(0)
@@ -609,6 +611,38 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(container)
         self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() + 1)
 
+    def goal_settings(self):
+        self.dialog = QDialog()
+        self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.dialog.setModal(True)
+
+        id_label = QLabel("Set goal id:")
+        id_edit = QLineEdit(self.current_goal_id)
+
+        ok_button = QPushButton("Ok")
+        ok_button.clicked.connect(lambda: self.save_goal_settings(id_edit))
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(lambda: self.dialog.close())
+
+        grid = QGridLayout()
+        grid.addWidget(id_label, 0, 0)
+        grid.addWidget(id_edit, 0, 1)
+        grid.addWidget(ok_button, 1, 0)
+        grid.addWidget(cancel_button, 1, 1)
+        self.dialog.setLayout(grid)
+        self.dialog.show()
+
+    def save_goal_settings(self, id_edit):
+        self.old_goal_id = self.current_goal_id
+        new_id = id_edit.text()
+        if new_id != self.current_goal_id:
+            goal = self.goals_dict.pop(self.current_goal_id)
+            self.goals_dict[new_id] = goal
+            self.id_list[self.id_list.index(self.current_goal_id)] = new_id
+            self.current_goal_id = new_id
+            self.setSaveEnabled()
+        self.dialog.close()
+
     def update_goal_indicator(self, text):
         self.d_diff_indicator.updateColor(text)
 
@@ -617,6 +651,7 @@ class MainWindow(QMainWindow):
             self.save_goal(previous)
         self.areChangesMade = False
         self.current_goal_id = self.goal_tree_list_widget.itemWidget(current_item).goal_id
+        self.old_goal_id = self.current_goal_id
         if self.current_goal_id in self.goals_dict:
             self.goals_dict[self.current_goal_id].displayData()
         else:
@@ -669,7 +704,7 @@ class MainWindow(QMainWindow):
         note = self.cell_list[3].toPlainText()
         if goal_name and len(characts) == 5: #ѕотом будет сравниватьс€ с кол-вом характеристик
             if self.goals_dict[self.current_goal_id].isGoalExists:
-                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", self.current_goal_id)
+                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", self.old_goal_id)
                 DataManager.updateMainData("goal", goal_data)
                 if previous:
                     current_widget = self.goal_tree_list_widget.itemWidget(previous)
