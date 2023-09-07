@@ -34,6 +34,18 @@ def loadMainData(data_type, *args):
         conn.close()
         return list(goal_data)
 
+    if data_type == "branch":
+        cur.execute("SELECT name FROM Branches WHERE RowID == ?", args)
+        branch_name = cur.fetchone()[0]
+        conn.close()
+        return branch_name
+
+    if data_type == "skills":
+        cur.execute("SELECT * FROM Skills")
+        skills = cur.fetchall()
+        conn.close()
+        return skills
+
 @exception_handler
 def saveMainData(data_type, args):
     conn = sql.connect(main_db)
@@ -42,18 +54,22 @@ def saveMainData(data_type, args):
         cur.execute("INSERT INTO Branches (name) VALUES (?)", (args,))
     if data_type == "goal":
         cur.execute("INSERT INTO Goals (ID, name, total_difficulty, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
+    if data_type == "skill":
+        print(f"args{args}")
+        cur.execute("INSERT INTO Skills (name) VALUES (?)", (args,))
     conn.commit()
     conn.close()
 
 @exception_handler
-def updateMainData(data_type, args):
+def updateMainData(data_type, *args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
         cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
     if data_type == "goal":
-        print(args)
         cur.execute("UPDATE Goals SET ID = ?, name = ?, total_difficulty = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ? WHERE ID == ?", args)
+    if data_type == "skill":
+        cur.execute("UPDATE Skills SET name = ? WHERE name = ?", args)
     conn.commit()
     conn.close()
 
@@ -65,6 +81,8 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Branches WHERE name == ?", args)
     if data_type == "goal":
         cur.execute("DELETE FROM Goals WHERE ID == ?", args)
+    if data_type == "skill":
+        cur.execute("DELETE FROM Goals WHERE name == ?", args)
     conn.commit()
     conn.close()
 

@@ -83,21 +83,22 @@ def shapeImage(size, image):
     painter.end()
 
     image.setMask(mask)
-
     return image
 
 class ProfileInfoBox(QWidget):
-    def __init__(self, image, info):
+    clicked = pyqtSignal()
+    def __init__(self, image, info, gotoProfile=True):
         super().__init__()
         self.setFixedSize(365, 480)
         self.arrangeWidgets(image, info)
+        self.gotoProfile = gotoProfile
 
     def arrangeWidgets(self, image, info):
         self.profile_image = QLabel()
         self.profile_image.setPixmap(shapeImage(QSize(80, 80), image))
 
-        user_name = QLabel(info[0])
-        user_name.setFont(QFont('Calibri', 24))
+        self.user_name = QLabel(info[0])
+        self.user_name.setFont(QFont('Calibri', 24))
 
         lvl_bar = QProgressBar()
         lvl_bar.setFixedSize(155, 32)
@@ -109,7 +110,7 @@ class ProfileInfoBox(QWidget):
         day_bar.setFixedSize(300, 28)
 
         v_box = QVBoxLayout()
-        v_box.addWidget(user_name, alignment=Qt.AlignmentFlag.AlignLeft)
+        v_box.addWidget(self.user_name, alignment=Qt.AlignmentFlag.AlignLeft)
         v_box.addWidget(lvl_bar, alignment=Qt.AlignmentFlag.AlignLeft)
         
         h_box = QHBoxLayout()
@@ -142,6 +143,10 @@ class ProfileInfoBox(QWidget):
         painter.drawLine(0, 476, 364, 370)
         
         painter.end()
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.MouseButton.LeftButton) and (self.profile_image.underMouse() or self.user_name.underMouse()) and self.gotoProfile:
+            self.clicked.emit()
 
 class GoalBranch(QWidget):
     deleteBranch = pyqtSignal(str)
@@ -575,3 +580,13 @@ class DateEditTool(QWidget):
             self.date_edit.blockSignals(False)
         else:
             date = self.current_date
+
+class SkillWidget(QWidget):
+    def __init__(self, skill_name, skill_progress):
+        super().__init__()
+        self.skill_name = skill_name
+        self.skill_progress = skill_progress
+        self.arrangeWidgets()
+
+    def arrangeWidgets(self):
+        name 

@@ -1,4 +1,5 @@
-style_sheet = """
+# -*- coding: cp1251 -*-
+style_sheet = r"""
 QWidget{
     background-color: #000000;
     }
@@ -88,4 +89,9 @@ QDateEdit::up-button:pressed{
 QCalendarView{
   background-color:  #FFFFFF;
     }
-"""
+QTreeWidget QHeaderView::up-arrow {
+    background-color: #FFD300;
+    }
+QTreeWidget QHeaderView::down-arrow {
+    background-color: #FFFFFF;
+    }"""
