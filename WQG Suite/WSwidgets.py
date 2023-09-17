@@ -1,9 +1,13 @@
 # -*- coding: cp1251 -*-
 import os, sys
 import DataManager
-from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog
+from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
-from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate
+from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QUrl
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+import tempfile
+from plotly.io import to_html
+import plotly.graph_objs as go
 
 class AddImageLabel(QLabel):
     imageAdded = pyqtSignal()
@@ -589,4 +593,134 @@ class SkillWidget(QWidget):
         self.arrangeWidgets()
 
     def arrangeWidgets(self):
-        name 
+        pass
+
+class PlotlyViewer(QWebEngineView):
+    def __init__(self, fig=None):
+        super().__init__()
+        self.page().profile().downloadRequested.connect(self.on_downloadRequested)
+ 
+        self.temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False)
+        self.set_figure(fig)
+ 
+    def set_figure(self, fig=None):
+        self.temp_file.seek(0)
+        if fig is None:
+            fig = go.Figure()
+        fig.update_xaxes(showspikes=True)
+        fig.update_yaxes(showspikes=True)
+        html = to_html(fig, config={"responsive": True, 'scrollZoom': True})
+        html += "\n<style>body{margin: 0;} \n.plot-container,.main-svg,.svg-container{width:100% !important; height:100% !important;}</style>"
+ 
+        self.temp_file.write(html)
+        self.temp_file.truncate()
+        self.temp_file.seek(0)
+        self.load(QUrl.fromLocalFile(self.temp_file.name))
+
+    def closeEvent(self, event):
+        self.temp_file.close()
+        os.unlink(self.temp_file.name)
+        super().closeEvent(event)
+ 
+    def on_downloadRequested(self, download):
+        dialog = QFileDialog()
+        path, _ = dialog.getSaveFileName(self, "Save File", os.path.join(os.getcwd(), "statistics.png"), "*.png")
+        if path:
+            download.setPath(path)
+            download.accept()
+
+class GraphItem(QWidget):
+    toggled = pyqtSignal(str, int)
+    def __init__(self, name, notStandard=False):
+        super().__init__()
+        self.name = name
+        self.show_checkbox = QCheckBox(self.name)
+        self.show_checkbox.stateChanged.connect(self.graph_toggled)
+        h_box = QHBoxLayout()
+        h_box.addWidget(self.show_checkbox, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        if notStandard:
+            remove_graph = QPushButton()
+            remove_graph.setIcon(QIcon(r"Files\icons\remove.png"))
+            remove_graph.setFixedSize(13, 13)
+            remove_graph.setIconSize(QSize(13, 13))
+            remove_graph.setObjectName("Tool")
+            h_box.addStretch()
+            h_box.addWidget(remove_graph)
+        h_box.setContentsMargins(10, 0, 0, 0)
+        self.setLayout(h_box)
+
+    def graph_toggled(self, state):
+        self.toggled.emit(self.name, state)
+
+class ObjectManager(QWidget):
+    def __init__(self, parent, line_edit, s_filter=["Goals", "Branches", "Skills", "Characts", "Graphs"]):
+        super().__init__()
+        self.load_data(s_filter)
+        self.line_edit = line_edit
+        self.line_edit.textChanged.connect(self.update_list)
+        self.list_widget = QListWidget()
+        self.list_widget.itemClicked.connect(self.fill_in)
+        self.setParent(parent)
+        self.setVisible(False)
+
+        goals_button = QPushButton("Goals")
+        branches_button = QPushButton("Branches")
+        skills_button = QPushButton("Skills")
+        characts_button = QPushButton("Characts")
+        graphs_button = QPushButton("Graphs")
+
+        h_box = QHBoxLayout()
+        h_box.setContentsMargins(0, 0, 0, 0)
+        buttons = [goals_button, branches_button, skills_button, characts_button, graphs_button]
+        filters = QButtonGroup()
+        
+        for button in buttons:
+            if button.text() in s_filter:
+                button.setCheckable(True)
+                h_box.addWidget(button)
+                filters.addButton(button)
+        filters.buttonClicked.connect(self.filter_search)
+            
+        v_box = QVBoxLayout()
+        v_box.setContentsMargins(0, 0, 0, 0)
+        v_box.addWidget(self.list_widget)
+        v_box.addLayout(h_box)
+        self.setLayout(v_box)
+
+    def fill_in(self, item):
+        self.line_edit.setText(item.text())
+        self.setVisible(False)
+
+    def update_list(self):
+        if self.line_edit.text() and self.line_edit.text() != " ":
+            geo = self.line_edit.geometry()
+            self.setGeometry(geo.x(), geo.y() + geo.height(), geo.width(), 200)
+            self.list_widget.clear()
+            text = self.line_edit.text()
+            relevant_text = []
+
+            for data in self.data:
+                if text.upper() in data.upper():
+                    relevant_text.append(data)
+            if relevant_text:
+                self.setVisible(True)
+                for text in relevant_text:
+                    item = QListWidgetItem(QIcon(r"Files\icons\settings.png"), text)
+                    self.list_widget.addItem(item)
+            else:
+                self.setVisible(False)
+        else:
+            self.setVisible(False)
+
+    def load_data(self, s_filter):
+        self.data = []
+        raw_data = []
+        for data_type in s_filter:
+            names = DataManager.loadMainData("names", data_type)
+            if names:
+                raw_data += names
+        if raw_data:
+            self.data = [item[0] for item in raw_data]
+    def filter_search(self):
+        pass

@@ -14,7 +14,6 @@ user_config_path = r"Files\config\user.ini"
 main_db = r"Files\data\main_test.db"
 other_db = r"Files\data\other.db"
 
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -43,6 +42,7 @@ class MainWindow(QMainWindow):
     def initializeUI(self):
         self.setWindowTitle("WQG's Suite")
         self.setWindowIcon(QIcon("Files\Icon.png"))
+        self.anyChangesMade = False
         self.showAnimation()
         self.setUpMainWindow()
 
@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
         statistics_button.setFixedSize(205, 110)
         statistics_button.setObjectName("Menu")
         statistics_button.setIconSize(QSize(205, 80))
+        statistics_button.clicked.connect(self.statistics_window)
 
         goals_button = QPushButton()
         goals_button.setIcon(QIcon(i_dir + r"\Goals.png"))
@@ -227,6 +228,12 @@ class MainWindow(QMainWindow):
     def previous_window(self):
         if self.stacked_widget.currentIndex() > 0:
             current_widget = self.stacked_widget.currentWidget()
+            if self.anyChangesMade:
+                self.anyChangesMade = False
+                prev_widget = self.stacked_widget.widget(self.stacked_widget.currentIndex() - 1)
+                current_widget.saveData()
+                if not current_widget.areChangesMade:
+                    prev_widget.updateWidget()
             self.stacked_widget.removeWidget(current_widget)
             current_widget.deleteLater()
 
@@ -234,6 +241,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() + 1)
 
     def create_toolbar(self):
+        self.tool_bar = QToolBar()
         self.toggle_toolbar_act = QAction()
         self.toggle_toolbar_act.triggered.connect(self.toggle_toolbar)
         self.toggle_toolbar_act.setShortcut("F1")
@@ -267,7 +275,6 @@ class MainWindow(QMainWindow):
 
         tools.append(object_manager)
         
-        self.tool_bar = QToolBar()
         for tool in tools:
             self.tool_bar.addWidget(tool)
             self.tool_bar.addSeparator()
@@ -303,6 +310,11 @@ class MainWindow(QMainWindow):
         self.dialog.setLayout(v_box)
         self.dialog.show()
 
+    def statistics_window(self):
+        stats_tab = wstabs.StatisticsTab()
+        self.stacked_widget.addWidget(stats_tab)
+        self.next_window()
+
     def goal_branches_window(self):
         branches_tab = wstabs.BranchesTab()
         branch_list_widget = branches_tab.branch_list_widget
@@ -321,10 +333,14 @@ class MainWindow(QMainWindow):
 
     def goal_window(self, item=None):
         goal_tab = wstabs.GoalTab(self.current_branch_id, item)
+        goal_tab.changesMade.connect(self.changesMade)
 
         self.stacked_widget.addWidget(goal_tab)
         self.next_window()
-        
+
+    def changesMade(self):
+        self.anyChangesMade = True
+
     def create_account(self):
         image = QLabel()
         image.setPixmap(QPixmap(i_dir + "\Grad Icon.png"))

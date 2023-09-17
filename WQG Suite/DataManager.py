@@ -46,6 +46,18 @@ def loadMainData(data_type, *args):
         conn.close()
         return skills
 
+    if data_type == "day_stats":
+        cur.execute("SELECT * FROM Days")
+        stats = cur.fetchall()
+        conn.close()
+        return stats
+
+    if data_type == "names":
+        cur.execute(f"SELECT name FROM {args[0]}")
+        names = cur.fetchall()
+        conn.close()
+        return names
+
 @exception_handler
 def saveMainData(data_type, args):
     conn = sql.connect(main_db)
@@ -55,13 +67,12 @@ def saveMainData(data_type, args):
     if data_type == "goal":
         cur.execute("INSERT INTO Goals (ID, name, total_difficulty, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
     if data_type == "skill":
-        print(f"args{args}")
         cur.execute("INSERT INTO Skills (name) VALUES (?)", (args,))
     conn.commit()
     conn.close()
 
 @exception_handler
-def updateMainData(data_type, *args):
+def updateMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":

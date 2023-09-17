@@ -8,6 +8,16 @@ QPushButton{
     color: #000000;
     border: none
     }
+QPushButton::checked{
+    border: 1px solid #FFD300;
+    color: #FFD300;
+    background-color: #000000
+    }
+QPushButton{
+    background-color: #FFD300;
+    color: #000000;
+    border: none
+    }
 QPushButton::pressed{
     background-color: #7F6900;
     border: none}
@@ -86,12 +96,16 @@ QDateEdit::down-button:pressed{
 QDateEdit::up-button:pressed{
     background-color: #7F6900
     }
-QCalendarView{
-  background-color:  #FFFFFF;
+QCalendarWidget QAbstractItemView{
+    background-color: white;
     }
 QTreeWidget QHeaderView::up-arrow {
     background-color: #FFD300;
     }
 QTreeWidget QHeaderView::down-arrow {
     background-color: #FFFFFF;
-    }"""
+    }
+QCheckBox{
+    color: #FFD300
+    }
+"""

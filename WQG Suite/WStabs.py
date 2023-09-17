@@ -1,6 +1,8 @@
+from unicodedata import category
 from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression
+from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator
+import plotly.graph_objs as go
 import WSwidgets as ws
 import WSobjects as wsobj
 import DataManager
@@ -72,7 +74,7 @@ class ProfileTab(QWidget):
     def rename_skill(self):
         new_name, _ = QInputDialog.getText(self, "Skill renaming", "Enter new skill name:")
         if new_name:
-            DataManager.updateMainData("skill", new_name, self.skills_tree_widget.currentItem().text(0))
+            DataManager.updateMainData("skill", [new_name, self.skills_tree_widget.currentItem().text(0)])
             self.skills_tree_widget.currentItem().setText(0, new_name)
             self.skills_tree_widget.resizeColumnToContents(0)
 
@@ -80,10 +82,8 @@ class ProfileTab(QWidget):
         ok = QMessageBox.question(self, "Skill deleting", "Delete skill?")
         if ok:
             DataManager.deleteMainData("skill", self.skills_tree_widget.currentItem().text(0))
-            print(self.skills_tree_widget.currentIndex().column())
             self.skills_tree_widget.takeTopLevelItem(self.skills_tree_widget.currentIndex().column() - 1)
             self.dialog.close()
-
 
 class BranchesTab(QWidget):
     def __init__(self):
@@ -155,8 +155,6 @@ class GoalsTab(QWidget):
         super().__init__()
         self.current_branch_id = branch
 
-        goals = DataManager.loadMainData("goals", self.current_branch_id)
-
         self.tree_widget = QTreeWidget()
         self.tree_widget.setColumnWidth(0, 135)
         self.tree_widget.setIconSize(QSize(97, 97))
@@ -165,6 +163,23 @@ class GoalsTab(QWidget):
         self.tree_widget.setHeaderLabels(headers)
         self.tree_widget.setSortingEnabled(True)
 
+        self.updateWidget()
+
+        h_box = QHBoxLayout()
+        h_box.setContentsMargins(300, 85, 250, 85)
+        h_box.addWidget(self.tree_widget)
+        
+        self.add_button = QPushButton()
+        self.add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
+        self.add_button.setFixedSize(50, 50)
+        self.add_button.setObjectName("Menu")
+        h_box.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+
+        self.setLayout(h_box)
+
+    def updateWidget(self):
+        self.tree_widget.clear()
+        goals = DataManager.loadMainData("goals", self.current_branch_id)
         for i in range(len(goals)):
             goal_info = goals[i]
             goal_info_str = list(str(item) for item in goal_info)#ѕреобразуем все значени€ в строковой тип
@@ -179,22 +194,10 @@ class GoalsTab(QWidget):
         
         self.tree_widget.resizeColumnToContents(5)
 
-        h_box = QHBoxLayout()
-        h_box.setContentsMargins(300, 85, 250, 85)
-        h_box.addWidget(self.tree_widget)
-        
-        self.add_button = QPushButton()
-        self.add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
-        self.add_button.setFixedSize(50, 50)
-        self.add_button.setObjectName("Menu")
-        h_box.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-
-        self.setLayout(h_box)
-
 class GoalTab(QWidget):
+    changesMade = pyqtSignal()
     def __init__(self, branch_id, item=None):
         super().__init__()
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.branch_id = str(branch_id)
         self.branch_name = DataManager.loadMainData("branch", branch_id)
         self.item = item
@@ -466,6 +469,7 @@ class GoalTab(QWidget):
     def setSaveEnabled(self):
         self.save_button.setEnabled(True)
         self.areChangesMade = True
+        self.changesMade.emit()
 
     def add_image(self):
         image_path, _ = QFileDialog.getOpenFileNames(self, "Choose image of images", filter="Image Files (*.png *.jpg *.bmp)")
@@ -536,3 +540,104 @@ class GoalTab(QWidget):
             if len(idl) == depth:
                 level_len += 1
         return f"{parent_id}.{level_len + 1}"
+
+    def saveData(self):
+        if QMessageBox.question(self, "Unsaved changes", "Some changes are made. Do you want to save them?") == QMessageBox.StandardButton.Yes:
+            self.save_goal()
+
+class StatisticsTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.x = 3
+        self.y = 6
+
+        self.fig = go.Figure()
+        self.fig.update_layout(
+            xaxis=dict(gridcolor='#444444', color='white', title='Dates', type='date'),
+            yaxis=dict(title="yaxis title", gridcolor='#444444', tickfont=dict(color='white')),
+            paper_bgcolor='black',
+            plot_bgcolor='black',
+            legend_font_color='white')
+        self.stats_view = ws.PlotlyViewer(self.fig)
+        self.stats_view.setFixedSize(1500, 825)
+        graphs_label = QLabel("Graphs")
+        graphs_label.setFont(QFont("Calibri", 24))
+        graphs_list_widget = QListWidget()
+        
+        standard_graphs = ["Mental state", "Physical state", "Work time", "Shedule completing, %", "Shedule completing accuracy, %", "Day rating"]
+        for graph in standard_graphs:
+            graph_item = ws.GraphItem(graph)
+            graph_item.toggled.connect(self.display_graph)
+            list_widget_item = QListWidgetItem(graphs_list_widget)
+            list_widget_item.setSizeHint(graph_item.sizeHint())
+            graphs_list_widget.addItem(list_widget_item)
+            graphs_list_widget.setItemWidget(list_widget_item, graph_item)
+
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText("Add graph...")
+
+        period_label_1 = QLabel("Viewing period: from:")
+        period_label_2 = QLabel("to:")
+        from_date_edit = QDateEdit()
+        to_date_edit = QDateEdit()
+        calc_settings = QPushButton("Calculations settings")
+
+        graphs_v_box = QVBoxLayout()
+        graphs_v_box.addWidget(graphs_label)
+        graphs_v_box.addWidget(graphs_list_widget)
+        graphs_v_box.addSpacing(20)
+        graphs_v_box.addWidget(line_edit)
+        graphs_v_box.addStretch()
+
+        period_h_box = QHBoxLayout()
+        period_h_box.addWidget(period_label_1)
+        period_h_box.addWidget(from_date_edit)
+        period_h_box.addWidget(period_label_2)
+        period_h_box.addWidget(to_date_edit)
+        period_h_box.addWidget(calc_settings)
+        period_h_box.addStretch()
+
+        stats_v_box = QVBoxLayout()
+        stats_v_box.addWidget(self.stats_view)
+        stats_v_box.addLayout(period_h_box)
+        stats_v_box.addStretch()
+        stats_v_box.setContentsMargins(0, 0, 0, 0)
+
+        main_h_box = QHBoxLayout()
+        main_h_box.addLayout(graphs_v_box)
+        main_h_box.addLayout(stats_v_box)
+
+        self.setLayout(main_h_box)
+
+        object_manager = ws.ObjectManager(self, line_edit)
+
+    def display_graph(self, graph_name, state):
+        self.fig.add_trace(go.Scatter(
+            x=[1, 2, 3],
+            y=[4, 5, 6],
+            name="yaxis 1 data"))
+        self.fig.add_trace(go.Scatter(
+            x=[1, 2, 3],
+            y=[0.4, 0.5, 0.6],
+            name="yaxis 1 data", yaxis='y2'))
+        self.fig.add_trace(go.Scatter(
+            x=[1, 2, 3],
+            y=[0.04, 0.05, 0.06],
+            name="yaxis 1 data", yaxis='y3'))
+
+        self.fig.update_layout(
+        yaxis=dict(
+        title='Numeric', gridcolor='#444444', color='#FFFFFF',),
+        yaxis2=dict(
+            title='Letteric',
+            overlaying='y',
+            gridcolor='#444444', 
+            color='#FFD300',
+            type="category"),
+        yaxis3=dict(
+        title='%',
+        overlaying='y', 
+        side='right',
+        gridcolor='#444444', color='#00FFFF'))
+
+        self.stats_view.set_figure(self.fig)
