@@ -8,19 +8,10 @@ QPushButton{
     color: #000000;
     border: none
     }
-QPushButton::checked{
-    border: 1px solid #FFD300;
-    color: #FFD300;
-    background-color: #000000
-    }
-QPushButton{
-    background-color: #FFD300;
-    color: #000000;
-    border: none
-    }
 QPushButton::pressed{
     background-color: #7F6900;
-    border: none}
+    border: none
+    }
 QPushButton#Tool{
     background-color: #000000;
     }
@@ -107,5 +98,20 @@ QTreeWidget QHeaderView::down-arrow {
     }
 QCheckBox{
     color: #FFD300
+    }
+QRadioButton{
+    color: #FFD300
+    }
+QRadioButton::indicator::unchecked{
+    image: url(C:/Users/WQG-S/OneDrive/Рабочий стол/code/WQG Suite/WQG Suite/Files/icons/rb unchecked.png)
+    }
+QRadioButton::indicator::checked{
+    image: url(C:/Users/WQG-S/OneDrive/Рабочий стол/code/WQG Suite/WQG Suite/Files/icons/rb checked.png)
+    }
+QRadioButton::indicator::disabled{
+    image: url(C:/Users/WQG-S/OneDrive/Рабочий стол/code/WQG Suite/WQG Suite/Files/icons/rb disabled.png)
+    }
+QRadioButton::disabled{
+    color: gray
     }
 """

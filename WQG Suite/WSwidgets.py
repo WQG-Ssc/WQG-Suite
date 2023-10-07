@@ -623,40 +623,145 @@ class PlotlyViewer(QWebEngineView):
         super().closeEvent(event)
  
     def on_downloadRequested(self, download):
-        dialog = QFileDialog()
-        path, _ = dialog.getSaveFileName(self, "Save File", os.path.join(os.getcwd(), "statistics.png"), "*.png")
-        if path:
-            download.setPath(path)
-            download.accept()
+        pass#dialog = QFileDialog()path, _ = dialog.getSaveFileName(self, "Save File", os.path.join(os.getcwd(), "statistics.png"), "*.png")if path:    download.setPath(path)    download.accept()
 
 class GraphItem(QWidget):
-    toggled = pyqtSignal(str, int)
-    def __init__(self, name, notStandard=False):
+    toggled = pyqtSignal(str, str, list, list, int)
+    def __init__(self, name, graph_type, goal_id, value_type):
         super().__init__()
         self.name = name
+        self.value_type = value_type
+        self.graph_type = graph_type
+        self.value_mode = "Per day"
+        self.showing_charact = "h"
         self.show_checkbox = QCheckBox(self.name)
         self.show_checkbox.stateChanged.connect(self.graph_toggled)
         h_box = QHBoxLayout()
         h_box.addWidget(self.show_checkbox, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        if notStandard:
+        if self.graph_type != "standard" or (self.graph_type == "standard" and self.name == "Work time"):
+            self.value_mode_switcher = QPushButton(self.value_mode)
+            self.value_mode_switcher.setCheckable(True)
+            self.value_mode_switcher.toggled.connect(self.switch_val_mode)
+            h_box.addWidget(self.value_mode_switcher, alignment=Qt.AlignmentFlag.AlignRight)
+
+        if self.graph_type != "standard":
             remove_graph = QPushButton()
             remove_graph.setIcon(QIcon(r"Files\icons\remove.png"))
             remove_graph.setFixedSize(13, 13)
             remove_graph.setIconSize(QSize(13, 13))
             remove_graph.setObjectName("Tool")
-            h_box.addStretch()
+
+            if self.graph_type == "goal":
+                cc_stats = DataManager.loadMainData("goal_custom", goal_id)# cc: date value, date value,|
+                cc_stats = cc_stats.split("|")
+                self.cc_stats_dict = {}
+                for cc in cc_stats:
+                    cc = cc.split(":")
+                    self.cc_stats_dict[cc[0]] = cc[1].split(",")
+
+                self.cc_names = self.cc_stats_dict.keys()
+
+                self.showing_charact_switcher = QPushButton(self.showing_charact)
+                self.showing_charact_switcher.clicked.connect(self.switch_showing_charact)
+                self.sct_state = 1
+                h_box.addWidget(self.showing_charact_switcher)
+            self.value_type = "Numeric"
+            
             h_box.addWidget(remove_graph)
         h_box.setContentsMargins(10, 0, 0, 0)
         self.setLayout(h_box)
 
     def graph_toggled(self, state):
-        self.toggled.emit(self.name, state)
+        if state == 1:
+            self.toggled.emit(self.name, None, None, None, state)
+        else:
+            self.x = []
+            self.y = []
+            if self.graph_type == "goal":
+                if self.showing_charact == "h":
+                    stat = DataManager.loadMainData("statistics", self.goal_id)
+                    previous_date = ""
+                    for s in stat:
+                        start_time = calculate_msecs(s[0])
+                        end_time = calculate_msecs(s[1])
+                        record_time = end_time - start_time
+                        record_time /= 3600
+                        date = s[2]
+                        if date not in self.x:
+                            self.x.append(date)
+                        if date == previous_date:
+                            self.y[-1] += record_time
+                        else:
+                            self.y.append(record_time)
+                        previous_date = date
+                else:
+                    stat = self.cc_stats_dict[self.showing_charact]
+                    for s in stat:
+                        s = s.split(" ")
+                        self.x.append(s[0])
+                        self.y.append(s[1])
+            elif self.graph_type == "skill":
+                stat = DataManager.loadMainData("skill_stat", self.name)
+                for s in stat:
+                    self.x.append(s[0])
+                    self.y.append(s[1])
+            elif self.graph_type == "standard":
+                stat = DataManager.loadMainData("day_stats", self.name)
+                for s in stat:
+                    self.x.append(s[0])
+                    self.y.append(s[1])
+
+            if self.value_mode == "All time":
+                counter = 0
+                y = []
+                for val in self.y:
+                    counter += val
+                    y.append(counter)
+                self.y = [item for item in y]
+            
+            self.toggled.emit(self.name, self.value_type, self.x, self.y, state)
+
+        def calculate_msecs(self, interval_str):
+            time_list = interval_str.split(":")
+            return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000
+
+    def switch_val_mode(self, state):
+        if state:
+            self.value_mode_switcher.setText("All time")
+            self.value_mode = "All time"
+        else:
+            self.value_mode_switcher.setText("Per day")
+            self.value_mode = "Per day"
+        self.graph_toggled(1)#Delete graph and then display updated
+        self.graph_toggled(2)
+
+    def switch_showing_charact(self):
+        if self.sct_state == len(self.cc_names):
+            self.sct_state = 1
+        else:
+            self.sct_state += 1
+        if self.sct_state == 1:
+            self.showing_charact = "h"
+            self.showing_charact_switcher.setText(self.showing_charact)
+            self.value_type = "Numeric"
+        else:
+            self.showing_charact = self.cc_names[self.sct_state - 2]
+            self.showing_charact_switcher.setText(self.showing_charact)
+            self.value_type = DataManager.loadMainData("characteristic", self.showing_charact)
+        self.graph_toggled(1)
+        self.graph_toggled(2)
 
 class ObjectManager(QWidget):
-    def __init__(self, parent, line_edit, s_filter=["Goals", "Branches", "Skills", "Characts", "Graphs"]):
+    selected = pyqtSignal(str, str, str)
+    def __init__(self, parent, line_edit, init_s_filter=["Goals", "Branches", "Skills", "Characteristics", "Graphs"], searching=False):
         super().__init__()
-        self.load_data(s_filter)
+        self.s_filter = [item for item in init_s_filter]
+
+        self.load_data()
+        self.searching = searching
+        self.isSelected = False
+        self.resized = False
         self.line_edit = line_edit
         self.line_edit.textChanged.connect(self.update_list)
         self.list_widget = QListWidget()
@@ -664,63 +769,126 @@ class ObjectManager(QWidget):
         self.setParent(parent)
         self.setVisible(False)
 
-        goals_button = QPushButton("Goals")
-        branches_button = QPushButton("Branches")
-        skills_button = QPushButton("Skills")
-        characts_button = QPushButton("Characts")
-        graphs_button = QPushButton("Graphs")
+        goals_button = QPushButton()
+        goals_button.setObjectName("Goals")
+        branches_button = QPushButton()
+        branches_button.setObjectName("Branches")
+        skills_button = QPushButton()
+        skills_button.setObjectName("Skills")
+        characts_button = QPushButton()
+        characts_button.setObjectName("Characteristics")
+        graphs_button = QPushButton()
+        graphs_button.setObjectName("Graphs")
 
         h_box = QHBoxLayout()
         h_box.setContentsMargins(0, 0, 0, 0)
         buttons = [goals_button, branches_button, skills_button, characts_button, graphs_button]
-        filters = QButtonGroup()
+        self.filters = QButtonGroup()
+        self.filters.setExclusive(False)
         
-        for button in buttons:
-            if button.text() in s_filter:
-                button.setCheckable(True)
-                h_box.addWidget(button)
-                filters.addButton(button)
-        filters.buttonClicked.connect(self.filter_search)
-            
         v_box = QVBoxLayout()
         v_box.setContentsMargins(0, 0, 0, 0)
         v_box.addWidget(self.list_widget)
-        v_box.addLayout(h_box)
+
+        if len(init_s_filter) > 1:
+            for button in buttons:
+                if button.objectName() in init_s_filter:
+                    button.setIcon(QIcon(os.path.join(r'Files\icons', f"{button.objectName()}.png")))
+                    button.setToolTip(button.objectName())
+                    button.setCheckable(True)
+                    button.setChecked(True)
+                    button.setStyleSheet("QPushButton{background-color: #000000; border: none} QPushButton::checked{background-color: #000000; border: 1px solid #FFD300}")
+                    h_box.addWidget(button)
+                    self.filters.addButton(button)
+            self.filters.buttonToggled.connect(self.filter_search)
+            v_box.addLayout(h_box)
+
         self.setLayout(v_box)
 
     def fill_in(self, item):
-        self.line_edit.setText(item.text())
+        text = item.text()
+        goal_id = item.goal_id
+        obj_type = item.obj_type
+
+        self.line_edit.setText(text)
+
+        self.selected.emit(text, goal_id, obj_type)
+        self.isSelected = True
         self.setVisible(False)
 
     def update_list(self):
-        if self.line_edit.text() and self.line_edit.text() != " ":
-            geo = self.line_edit.geometry()
-            self.setGeometry(geo.x(), geo.y() + geo.height(), geo.width(), 200)
+        self.isSelected = False
+        text = self.line_edit.text()
+        areResults = False
+        if text and text != " ":
+            if not self.resized:
+                geo = self.line_edit.geometry()
+                self.setGeometry(geo.x(), geo.y() + geo.height(), geo.width(), 200)
+                self.resized = True
             self.list_widget.clear()
-            text = self.line_edit.text()
-            relevant_text = []
-
-            for data in self.data:
-                if text.upper() in data.upper():
-                    relevant_text.append(data)
-            if relevant_text:
-                self.setVisible(True)
-                for text in relevant_text:
-                    item = QListWidgetItem(QIcon(r"Files\icons\settings.png"), text)
-                    self.list_widget.addItem(item)
-            else:
-                self.setVisible(False)
+            
+            for obj_type in self.data.keys():
+                if obj_type in self.s_filter:
+                    for data in self.data[obj_type]:
+                        if text.upper() in data.upper():
+                            icon = QIcon(os.path.join(r'Files\icons', f"{obj_type}.png"))
+                            item = ListWidgetItem(icon, data)
+                            item.obj_type = obj_type
+                            if obj_type == "Goals":
+                                item.goal_id = self.goals_ids[self.data[obj_type].index(data)]
+                            
+                            self.list_widget.addItem(item)
+                            areResults = True
+                if areResults:
+                    self.setVisible(True)
         else:
             self.setVisible(False)
 
-    def load_data(self, s_filter):
-        self.data = []
-        raw_data = []
-        for data_type in s_filter:
+    def load_data(self):
+        self.data = {}
+        for data_type in self.s_filter:
             names = DataManager.loadMainData("names", data_type)
+            names = [item[0] for item in names]
+            if data_type == "Goals":
+                self.goals_ids = [item[1] for item in names]
             if names:
-                raw_data += names
-        if raw_data:
-            self.data = [item[0] for item in raw_data]
-    def filter_search(self):
-        pass
+                self.data[data_type] = names
+
+    def filter_search(self, button, toggled):
+        if toggled:
+            self.s_filter.append(button.objectName())
+        else:
+            self.s_filter.remove(button.objectName())
+        self.update_list()
+
+class SkillCharactListWidget(QListWidget):
+    def __init__(self):
+        super().__init__()
+        self.addedItemsText = {}
+
+class ListWidgetItem(QListWidgetItem):
+    def __init__(self, icon, text):
+        super().__init__()
+        self.obj_type = ""
+        self.goal_id = ""
+        self.setIcon(icon)
+        self.setText(text)
+
+class SkillCharactWidget(QWidget):
+    def __init__(self, text, value):
+        super().__init__()
+        label = QLabel(text)
+        self.delete_button = QPushButton()
+            
+        self.delete_button.setIcon(QIcon(r"Files\icons\remove.png"))
+        self.delete_button.setObjectName("Tool")
+        self.delete_button.setFixedSize(20, 20)
+        h_box = QHBoxLayout()
+        self.value_edit = QLineEdit(value)
+
+        h_box.addWidget(label)
+        h_box.addWidget(self.value_edit)
+
+        h_box.addWidget(self.delete_button)
+        self.setLayout(h_box)
+        self.setFixedWidth(250)

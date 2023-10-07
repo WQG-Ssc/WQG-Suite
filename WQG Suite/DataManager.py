@@ -47,16 +47,51 @@ def loadMainData(data_type, *args):
         return skills
 
     if data_type == "day_stats":
-        cur.execute("SELECT * FROM Days")
+        cur.execute(f"SELECT date, [{args[0]}] FROM Days")
         stats = cur.fetchall()
         conn.close()
         return stats
 
     if data_type == "names":
-        cur.execute(f"SELECT name FROM {args[0]}")
+        if args[0] == "Goals":
+            cur.execute(f"SELECT name, ID FROM Goals")
+        else:
+            cur.execute(f"SELECT name FROM {args[0]}")
         names = cur.fetchall()
         conn.close()
         return names
+    
+    if data_type == "graphs":
+        cur.execute("SELECT * FROM Graphs")
+        graphs = cur.fetchall()
+        conn.close()
+        return graphs
+
+    if data_type == "goal_custom":#Custom characteristics
+        cur.execute("SELECT cc_stats FROM Goals WHERE ID == ?", (args))
+        cc_stats = cur.fetchall()
+        conn.close()
+        return cc_stats
+
+    if data_type == "characteristic":
+        cur.execute("SELECT type FROM Characteristics WHERE name == ?", (args))
+        c_type = cur.fetchall()
+        conn.close()
+        return c_type
+
+    if data_type == "skill_stat":
+        cur.execute("SELECT RowID FROM Skills WHERE name = ?", args)
+        skill_id = cur.fetchone()[0]
+        cur.execute(f"SELECT date, {skill_id} FROM Skills_statistics WHERE {skill_id} IS NOT NULL")
+        stat = cur.fetchall()
+        conn.close()
+        return stat
+
+    if data_type == "statistics":
+        cur.execute("SELECT date, start_time, end_time FROM Main_statistics WHERE task_ID == ?", args)
+        stat = cur.fetchall()
+        conn.close()
+        return stat
 
 @exception_handler
 def saveMainData(data_type, args):
@@ -67,7 +102,11 @@ def saveMainData(data_type, args):
     if data_type == "goal":
         cur.execute("INSERT INTO Goals (ID, name, total_difficulty, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
     if data_type == "skill":
-        cur.execute("INSERT INTO Skills (name) VALUES (?)", (args,))
+        cur.execute(f"INSERT INTO Skills (name) VALUES ('{args[0]}')")
+        cur.execute("SELECT RowID FROM Skills WHERE name = ?", (args,))
+        cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{cur.fetchone()[0]}' REAL")
+    if data_type == "Characteristics":
+        cur.execute("INSERT INTO Characteristics (name, c_type, v_type, c_values, showing_in_gl) VALUES (?, ?, ?, ?, ?)", args)
     conn.commit()
     conn.close()
 
@@ -76,11 +115,13 @@ def updateMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
-        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
+        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", (args,))
     if data_type == "goal":
         cur.execute("UPDATE Goals SET ID = ?, name = ?, total_difficulty = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ? WHERE ID == ?", args)
     if data_type == "skill":
-        cur.execute("UPDATE Skills SET name = ? WHERE name = ?", args)
+        cur.execute("UPDATE Skills SET name = ? WHERE name = ?", (args,))
+    if data_type == "Characteristics":
+        cur.execute("UPDATE Characteristics SET c_type = ?, v_type = ?, c_value = ?, showing_in_gl = ? WHERE name == ?", args)
     conn.commit()
     conn.close()
 
@@ -92,8 +133,6 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Branches WHERE name == ?", args)
     if data_type == "goal":
         cur.execute("DELETE FROM Goals WHERE ID == ?", args)
-    if data_type == "skill":
-        cur.execute("DELETE FROM Goals WHERE name == ?", args)
     conn.commit()
     conn.close()
 

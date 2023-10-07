@@ -1,5 +1,5 @@
 # -*- coding: cp1251 -*-
-import os, sys, pickle, configparser, subprocess, DataManager
+import os, sys, configparser, subprocess, DataManager
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
@@ -25,10 +25,13 @@ class MainWindow(QMainWindow):
             conn = sql.connect(main_db)
             cur = conn.cursor()
             cur.execute("CREATE TABLE Main_statictics (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT)")
-            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY, name TEXT, total_difficulty INTEGER, time REAl, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT)")
-            cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY, time REAL)")
-            cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY, custom_characteristics TEXT)")
-            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY, php TEXT, hp TEXT, work_time REAL, skills_xp TEXT)")
+            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, total_difficulty INTEGER, time REAl, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats)")
+            cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
+            cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT)")
+            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER, skills_xp TEXT)")
+            cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT)")
+            cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT, c_values TEXT, showing_in_gl BOOL)")
+            cur.execute("CREATE TABLE Skills_statistics (date TEXT)")
             conn.commit()
             conn.close()
         if not os.path.exists(other_db):
@@ -67,6 +70,7 @@ class MainWindow(QMainWindow):
         self.authorize()
         
     def authorize(self):
+        
         if os.path.exists(user_config_path):
             config = configparser.ConfigParser()
             config.read(user_config_path)
@@ -75,60 +79,62 @@ class MainWindow(QMainWindow):
             self.user_password = config.get("User", "Password")
             self.user_image = QPixmap(r"Files/icons/User/Profile_picture.png")
 
-            time = QTime()
-            current_hour = int(time.currentTime().toString().split(":")[0])
-            if current_hour > 18:
-                time_of_day = "evening"
-            elif current_hour > 12:
-                time_of_day = "afternoon"
-            elif current_hour >= 0:
-                time_of_day = "morning"
+            self.main_menu()
 
-            header_label = QLabel(f"Good {time_of_day}, {self.user_name.split()[0]}!")
-            header_label.setFont(QFont('Calibri', 36, 700))
+        #    time = QTime()
+        #    current_hour = int(time.currentTime().toString().split(":")[0])
+        #    if current_hour > 18:
+        #        time_of_day = "evening"
+        #    elif current_hour > 12:
+        #        time_of_day = "afternoon"
+        #    elif current_hour >= 0:
+        #        time_of_day = "morning"
 
-            profile_image = QLabel()
-            profile_image.setPixmap(ws.shapeImage(QSize(80, 80), self.user_image))
-            password_label = QLabel("Password:")
+        #    header_label = QLabel(f"Good {time_of_day}, {self.user_name.split()[0]}!")
+        #    header_label.setFont(QFont('Calibri', 36, 700))
 
-            self.password_edit = QLineEdit()
-            self.password_edit.setFixedWidth(150)
+        #    profile_image = QLabel()
+        #    profile_image.setPixmap(ws.shapeImage(QSize(80, 80), self.user_image))
+        #    password_label = QLabel("Password:")
 
-            self.enter_password_act = QAction()
-            self.enter_password_act.triggered.connect(self.check_password)
-            self.enter_password_act.setShortcut("Enter")
+        #    self.password_edit = QLineEdit()
+        #    self.password_edit.setFixedWidth(150)
 
-            enter_button = QPushButton()
-            enter_button.setIcon(QIcon(i_dir + r"\Arrow Right.png"))
-            enter_button.setFixedSize(20, 20)
-            enter_button.addAction(self.enter_password_act)
-            enter_button.clicked.connect(self.check_password)
+        #    self.enter_password_act = QAction()
+        #    self.enter_password_act.triggered.connect(self.check_password)
+        #    self.enter_password_act.setShortcut("Enter")
 
-            h_box = QHBoxLayout()
-            h_box.addStretch()
-            h_box.addWidget(password_label)
-            h_box.addWidget(self.password_edit)
-            h_box.addWidget(enter_button)
-            h_box.addStretch()
+        #    enter_button = QPushButton()
+        #    enter_button.setIcon(QIcon(i_dir + r"\Arrow Right.png"))
+        #    enter_button.setFixedSize(20, 20)
+        #    enter_button.addAction(self.enter_password_act)
+        #    enter_button.clicked.connect(self.check_password)
 
-            entry_container = QWidget()
-            entry_container.setLayout(h_box)
+        #    h_box = QHBoxLayout()
+        #    h_box.addStretch()
+        #    h_box.addWidget(password_label)
+        #    h_box.addWidget(self.password_edit)
+        #    h_box.addWidget(enter_button)
+        #    h_box.addStretch()
 
-            main_v_box = QVBoxLayout()
-            main_v_box.addStretch()
-            main_v_box.addWidget(header_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-            main_v_box.addSpacing(40)
-            main_v_box.addWidget(profile_image, alignment=Qt.AlignmentFlag.AlignHCenter)
-            main_v_box.addWidget(entry_container)
-            main_v_box.addStretch()
+        #    entry_container = QWidget()
+        #    entry_container.setLayout(h_box)
 
-            container = QWidget()
-            container.setLayout(main_v_box)
+        #    main_v_box = QVBoxLayout()
+        #    main_v_box.addStretch()
+        #    main_v_box.addWidget(header_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        #    main_v_box.addSpacing(40)
+        #    main_v_box.addWidget(profile_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+        #    main_v_box.addWidget(entry_container)
+        #    main_v_box.addStretch()
 
-            self.stacked_widget.addWidget(container)
-            self.stacked_widget.setCurrentIndex(0)
+        #    container = QWidget()
+        #    container.setLayout(main_v_box)
 
-        else: self.create_account()
+        #    self.stacked_widget.addWidget(container)
+        #    self.stacked_widget.setCurrentIndex(0)
+
+        #else: self.create_account()
 
     def check_password(self):
         if self.password_edit.text():
@@ -173,7 +179,7 @@ class MainWindow(QMainWindow):
         statistics_button.clicked.connect(self.statistics_window)
 
         goals_button = QPushButton()
-        goals_button.setIcon(QIcon(i_dir + r"\Goals.png"))
+        goals_button.setIcon(QIcon(i_dir + r"\Goals tab.png"))
         goals_button.setFixedSize(129, 110)
         goals_button.setObjectName("Menu")
         goals_button.setIconSize(QSize(129, 100))
@@ -218,7 +224,7 @@ class MainWindow(QMainWindow):
         self.create_toolbar()
 
         self.stacked_widget.addWidget(container)
-        self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
+        #self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image, self.user_info)
@@ -247,8 +253,6 @@ class MainWindow(QMainWindow):
         self.toggle_toolbar_act.setShortcut("F1")
         self.addAction(self.toggle_toolbar_act)
 
-        tools = []
-
         toggle_button = QPushButton()
         toggle_button.setIcon(QIcon(i_dir + r"\Toggle.png"))
         toggle_button.clicked.connect(self.toggle_toolbar)
@@ -257,25 +261,17 @@ class MainWindow(QMainWindow):
         settings_button.setIcon(QIcon(i_dir + r"\Settings.png"))
         settings_button.clicked.connect(self.settings)
         time_manager_button = QPushButton()
-        time_manager_button.setIcon(QIcon(i_dir + r"\Fast Solution.png"))
-        time_manager_button.clicked.connect(self.launch_time_manager)
-        notes_button = QPushButton()
-        notes_button.setIcon(QIcon(i_dir + r"\Notes.png"))
-        notes_button.clicked.connect(self.notes)
-        object_manager = QLineEdit()
+        time_manager_button.setIcon(QIcon(i_dir + r"\Time Manager icon.png"))
+        time_manager_button.clicked.connect(lambda: subprocess.Popen("WS Time Manager.exe"))
+        obj_manager_button = QPushButton()
+        obj_manager_button.setIcon(QIcon(i_dir + r"\search.png"))
+        obj_manager_button.clicked.connect(self.open_obj_manager)
 
-        tools.append(toggle_button)
-        tools.append(settings_button)
-        tools.append(time_manager_button)
-        tools.append(notes_button)
+        tools = [toggle_button, settings_button, obj_manager_button, time_manager_button]
 
         for tool in tools:
             tool.setObjectName("Tool")
             tool.setIconSize(QSize(30, 30))
-
-        tools.append(object_manager)
-        
-        for tool in tools:
             self.tool_bar.addWidget(tool)
             self.tool_bar.addSeparator()
 
@@ -285,8 +281,20 @@ class MainWindow(QMainWindow):
 
         self.addToolBar(Qt.ToolBarArea.RightToolBarArea, self.tool_bar)
 
-    def launch_time_manager(self):
-        time_manager = subprocess.Popen("WS Time Manager.exe")
+    def open_obj_manager(self):
+        self.dialog = QDialog()
+        self.dialog.setModal(True)
+        self.dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        line_edit = QLineEdit(self.dialog)
+        line_edit.setStyleSheet("border-radius: 15px")
+        line_edit.setPlaceholderText("Search object...")
+        line_edit.setFont(QFont("Calibri", 18))
+        self.dialog.setMinimumSize(line_edit.sizeHint().width(), line_edit.sizeHint().height() + 200)
+        
+        obj_manager = ws.ObjectManager(self.dialog, line_edit)
+        obj_manager.setStyleSheet("background-color: #000000")
+        self.dialog.show()
 
     def toggle_toolbar(self):
         if self.tool_bar.isVisible():
@@ -334,12 +342,16 @@ class MainWindow(QMainWindow):
     def goal_window(self, item=None):
         goal_tab = wstabs.GoalTab(self.current_branch_id, item)
         goal_tab.changesMade.connect(self.changesMade)
+        goal_tab.changesSaved.connect(self.changesSaved)
 
         self.stacked_widget.addWidget(goal_tab)
         self.next_window()
 
     def changesMade(self):
         self.anyChangesMade = True
+
+    def changesSaved(self):
+        self.anyChangesMade = False
 
     def create_account(self):
         image = QLabel()

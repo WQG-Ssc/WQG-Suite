@@ -1,5 +1,4 @@
-from unicodedata import category
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator
 import plotly.graph_objs as go
@@ -70,20 +69,6 @@ class ProfileTab(QWidget):
         v_box.addWidget(delete_button)
         self.dialog.setLayout(v_box)
         self.dialog.show()
-
-    def rename_skill(self):
-        new_name, _ = QInputDialog.getText(self, "Skill renaming", "Enter new skill name:")
-        if new_name:
-            DataManager.updateMainData("skill", [new_name, self.skills_tree_widget.currentItem().text(0)])
-            self.skills_tree_widget.currentItem().setText(0, new_name)
-            self.skills_tree_widget.resizeColumnToContents(0)
-
-    def delete_skill(self):
-        ok = QMessageBox.question(self, "Skill deleting", "Delete skill?")
-        if ok:
-            DataManager.deleteMainData("skill", self.skills_tree_widget.currentItem().text(0))
-            self.skills_tree_widget.takeTopLevelItem(self.skills_tree_widget.currentIndex().column() - 1)
-            self.dialog.close()
 
 class BranchesTab(QWidget):
     def __init__(self):
@@ -196,6 +181,7 @@ class GoalsTab(QWidget):
 
 class GoalTab(QWidget):
     changesMade = pyqtSignal()
+    changesSaved = pyqtSignal()
     def __init__(self, branch_id, item=None):
         super().__init__()
         self.branch_id = str(branch_id)
@@ -248,7 +234,7 @@ class GoalTab(QWidget):
         characts_gb = QGroupBox("Characteristics")
         characts_gb.setFont(QFont('Calibri', 18))
         characts_gb.setFixedWidth(262)
-        characts_list_widget = QListWidget()
+        characts_list_widget = ws.SkillCharactListWidget()
         characts_list_widget.setStyleSheet("QScrollBar{width: 0px}")
 
         charact_edits = []
@@ -292,6 +278,7 @@ class GoalTab(QWidget):
 
         characts_v_box = QVBoxLayout()
         add_new_charact_button = QPushButton("Add new characteristics...")
+        add_new_charact_button.clicked.connect(lambda: self.add_skill_or_charact_dialog("Characteristics", characts_list_widget))
         characts_v_box.addWidget(characts_list_widget, alignment=Qt.AlignmentFlag.AlignBottom)
         characts_v_box.addWidget(add_new_charact_button)
         characts_gb.setLayout(characts_v_box)
@@ -300,12 +287,13 @@ class GoalTab(QWidget):
         skills_gb = QGroupBox("Skills used")
         skills_gb.setFont(QFont('Calibri', 18))
         skills_gb.setFixedWidth(262)
-        skills_list_widget = QListWidget()
+        skills_list_widget = ws.SkillCharactListWidget()
         skills_gb.setStyleSheet("QScrollBar{width: 0px}")
         skills_v_box = QVBoxLayout()
         skills_v_box.addStretch()
 
         add_skill_button = QPushButton("Add skill...")
+        add_skill_button.clicked.connect(lambda: self.add_skill_or_charact_dialog("Skills", skills_list_widget))
 
         skills_v_box.addWidget(skills_list_widget, alignment=Qt.AlignmentFlag.AlignBottom)
         skills_v_box.addWidget(add_skill_button)
@@ -403,6 +391,172 @@ class GoalTab(QWidget):
 
         self.setLayout(main_grid)
 
+    def add_skill_or_charact_dialog(self, data_type, list_widget):
+        data_type_name = data_type[0].lower() + data_type[1:-1]
+        self.dialog = QDialog()
+        self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.dialog.setFixedHeight(275)
+        self.dialog.setModal(True)
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText(f"Enter {data_type_name} name...")
+        object_manager = ws.ObjectManager(self.dialog, line_edit, [data_type])
+        ok_button = QPushButton()
+        enter_act = QAction()
+        enter_act.triggered.connect(ok_button.click)
+        ok_button.addAction(enter_act)
+        ok_button.clicked.connect(lambda: self.add_skill_or_charact([data_type, line_edit, list_widget, object_manager]))
+        ok_button.setIcon(QIcon(i_dir + r"\Arrow Right.png"))
+        ok_button.setFixedSize(20, 20)
+        h_box = QHBoxLayout()
+        h_box.addWidget(line_edit)
+        h_box.addWidget(ok_button)
+        v_box = QVBoxLayout()
+        v_box.addLayout(h_box)
+        v_box.addStretch()
+        if data_type == "Characteristics":
+            charact_button = QPushButton("Add new or change existing characteristic")
+            charact_button.clicked.connect(lambda: self.charact_settings(line_edit, object_manager))
+            v_box.addWidget(charact_button)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
+
+    def charact_settings(self, line_edit, object_manager):
+        self.dialog1 = QDialog()
+        self.dialog1.setWindowTitle("Characteristic settings")
+        self.dialog1.setModal(True)
+        self.charact_widgets = []
+        charact_edit = QLineEdit()
+        charact_edit.setPlaceholderText("Enter characteristic name")
+
+        is_showing_checkbox = QCheckBox("Showing in goal list")
+        charact_type_label = QLabel("Choose characteristic type:")
+        
+        static_rb = QRadioButton("static")
+        dynamic_rb = QRadioButton("dynamic")
+        self.charact_type_group = QButtonGroup()
+        self.charact_type_group.addButton(static_rb)
+        self.charact_type_group.addButton(dynamic_rb)
+        self.charact_type_group.buttonClicked.connect(self.update_widget)
+
+        value_type_label = QLabel("Choose value type:")
+        quantitative_rb = QRadioButton("quantitative")
+        self.scale_rb = QRadioButton("scale")
+
+        self.value_type_group = QButtonGroup()
+        self.value_type_group.addButton(quantitative_rb)
+        self.value_type_group.addButton(self.scale_rb)
+        self.value_type_group.buttonClicked.connect(self.update_widget)
+
+        self.v_box = QVBoxLayout()
+        self.v_box.addWidget(is_showing_checkbox)
+        self.v_box.addWidget(charact_edit)
+        self.v_box.addWidget(charact_type_label)
+        self.v_box.addWidget(static_rb)
+        self.v_box.addWidget(dynamic_rb)
+        self.v_box.addWidget(value_type_label)
+        self.v_box.addWidget(quantitative_rb)
+        self.v_box.addWidget(self.scale_rb)
+        self.v_box.addStretch()
+
+        if object_manager.isSelected:
+            charact_edit.setText(line_edit.text())
+            charact_edit.setReadOnly(True)
+
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(lambda: self.save_charact(charact_edit, line_edit, is_showing_checkbox, object_manager))
+        ok_v_box = QVBoxLayout()
+        ok_v_box.addWidget(ok_button)
+        main_v_box = QVBoxLayout()
+        main_v_box.addLayout(self.v_box)
+        main_v_box.addLayout(ok_v_box)
+        self.dialog1.setLayout(main_v_box)
+        self.dialog1.show()
+
+    def save_charact(self, charact_edit, line_edit, is_showing_cb, obj_manager):
+        charact_name = charact_edit.text()
+        charact_type = self.charact_type_group.checkedButton().text()
+        value_type = self.value_type_group.checkedButton().text()
+        is_showing = is_showing_cb.isChecked()
+        if charact_name and charact_type and value_type:
+            if charact_type == "static":
+                if value_type == "quantitative":
+                    value = self.min_val_edit.text() + " " + self.max_val_edit.text()
+                else:
+                    value = self.scale_vals_edit.text()
+            if obj_manager.isSelected:
+                DataManager.updateMainData("Characteristics", [charact_type, value_type, value, is_showing, charact_name])
+            else:
+                DataManager.saveMainData("Characteristics", [charact_name, charact_type, value_type, value, is_showing])
+                obj_manager.isSelected = True
+            self.dialog1.close()
+            obj_manager.load_data()
+            line_edit.setText(charact_name)
+        else:
+            QMessageBox.warning(self.dialog1, "Failed to create a custom characteristic", "Not all the required information were entered")
+
+    def update_widget(self, button):
+        if self.charact_widgets:
+            for wid in self.charact_widgets:
+                self.v_box.removeWidget(wid)
+                wid.deleteLater()
+
+        if button.text() == "dynamic":
+            self.value_type_group.setExclusive(False)
+            self.scale_rb.setEnabled(False)
+            self.value_type_group.setExclusive(True)
+        elif button.text() == "static":
+            self.value_type_group.setExclusive(False)
+            self.scale_rb.setEnabled(True)
+            self.value_type_group.setExclusive(True)
+
+        if button.text() == "scale":
+            self.scale_vals_edit = QLineEdit()
+            self.scale_vals_edit.setPlaceholderText("Set scale values")
+            self.charact_widgets = [self.scale_vals_edit]
+            self.v_box.addWidget(self.scale_vals_edit)
+        elif button.text() == "quantitative":
+            self.max_val_edit = QLineEdit()
+            self.max_val_edit.setPlaceholderText("Set max value")
+            self.min_val_edit = QLineEdit()
+            self.min_val_edit.setPlaceholderText("Set min value")
+            self.charact_widgets = [self.max_val_edit, self.min_val_edit]
+            self.v_box.addWidget(self.max_val_edit)
+            self.v_box.addWidget(self.min_val_edit)
+
+    def add_skill_or_charact(self, standard_mode=[], setting_mode=[]):#Standard mode: [data_type, line_edit, list_widget, object_manager]
+        if setting_mode:
+            object_name, object_value, list_widget = setting_mode
+        else:
+            object_value = ""
+            data_type, line_edit, list_widget, object_manager = standard_mode
+            object_name = line_edit.text()
+        if setting_mode or object_manager.isSelected and object_name not in list_widget.addedItemsText:
+            widget = ws.SkillCharactWidget(object_name, object_value)
+            widget.value_edit.textEdited.connect(lambda: self.skill_or_charact_changed(widget.value_edit, list_widget, object_name))
+            widget.delete_button.clicked.connect(lambda: self.remove_skill_or_charact(item, object_name, list_widget))
+            self.setSaveEnabled()
+
+            item = QListWidgetItem()
+            item.setSizeHint(widget.sizeHint())
+
+            list_widget.addItem(item)
+            list_widget.addedItemsText[object_name] = object_value
+            list_widget.setItemWidget(item, widget)
+            if standard_mode:
+                self.dialog.close()
+        else:
+            data_type_name = data_type[0].lower() + data_type[1:-1]
+            QMessageBox.warning(self, f"Invalid {data_type_name} name", f"Choose an existing {data_type_name} from the object manager box and make sure you haven't added this {data_type_name} already.")
+
+    def remove_skill_or_charact(self, item, object_name, list_widget):
+        list_widget.takeItem(list_widget.row(item))
+        list_widget.addedItemsText.pop(object_name)
+        self.setSaveEnabled()
+
+    def skill_or_charact_changed(self, line_edit, list_widget, name):
+        list_widget.addedItemsText[name] = line_edit.text()
+        self.setSaveEnabled()
+
     def goal_settings(self):
         self.dialog = QDialog()
         self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
@@ -447,12 +601,12 @@ class GoalTab(QWidget):
         if self.current_goal_id in self.goals_dict:
             self.goals_dict[self.current_goal_id].displayData()
         else:
-            goal = wsobj.Goal(self.cell_list, self.list_widget_list, self.current_goal_id)
+            goal = wsobj.Goal(self.cell_list, self.list_widget_list, self.add_skill_or_charact, self.current_goal_id)
             goal.skillCharactChanged.connect(self.setSaveEnabled)
             self.goals_dict[self.current_goal_id] = goal
 
     def add_subgoal(self, parent_id):
-        subgoal = wsobj.Goal(self.cell_list, self.list_widget_list)
+        subgoal = wsobj.Goal(self.cell_list, self.list_widget_list, self.add_skill_or_charact)
         self.current_goal_id = self.getGoalID(parent_id)
         self.goals_dict[self.current_goal_id] = subgoal
         self.id_list.append(self.current_goal_id)
@@ -495,9 +649,43 @@ class GoalTab(QWidget):
             characts[0] = 50 #TEST
 
         note = self.cell_list[3].toPlainText()
-        if goal_name and len(characts) == 5: #ѕотом будет сравниватьс€ с кол-вом характеристик
+
+        used_skills = ""
+        custom_characts = ""
+        skills_list_wid = self.list_widget_list[2]
+        skill_values = []
+
+        skills = list(skills_list_wid.addedItemsText.keys())
+        if len(skills) == 1:
+            skills_list_wid.addedItemsText[skills[0]] = "100"
+        for skill in skills:
+            skill_value = skills_list_wid.addedItemsText[skill]
+            used_skills += f"{skill}:{skill_value},"
+            skill_values.append(skill_value)
+
+        skill_values = [int(item) for item in skill_values]
+        if sum(skill_values) == 100:
+            skills_valid = True
+        else:
+            skills_valid = False
+
+        used_skills = used_skills.rstrip(",")
+
+        cc_list_widget = self.list_widget_list[1]
+        full_cc_values = True
+        for cc in cc_list_widget.addedItemsText.keys():
+            c_value = cc_list_widget.addedItemsText[cc]
+            if not c_value:
+                full_cc_values = False
+            if type(c_value) == list:
+                c_value = " ".join(c_value)
+            custom_characts += f"{cc}:{c_value},"
+        custom_characts = custom_characts.rstrip(",")
+
+        if goal_name and len(characts) == 5 and used_skills and full_cc_values and skills_valid:
             if self.goals_dict[self.current_goal_id].isGoalExists:
-                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "", self.old_goal_id)
+                goal_progress = self.goals_dict[self.current_goal_id].goal_data[11]
+                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, "state", note, image_list, goal_progress.split(",")[0] + "1", custom_characts, self.old_goal_id)
                 DataManager.updateMainData("goal", goal_data)
                 if previous:
                     current_widget = self.goal_tree_list_widget.itemWidget(previous)
@@ -505,7 +693,7 @@ class GoalTab(QWidget):
                     current_widget = self.goal_tree_list_widget.itemWidget(self.goal_tree_list_widget.currentItem())
                 current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[3]), goal_data[11].split(",")[0])
             else:
-                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + ("us", "state", note, image_list, "50,1", "")
+                goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, "state", note, image_list, "0,1", custom_characts)
                 DataManager.saveMainData("goal", goal_data)
 
                 self.id_list.sort()
@@ -526,6 +714,7 @@ class GoalTab(QWidget):
                 self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
             self.save_button.setEnabled(False)
             self.areChangesMade = False
+            self.changesSaved.emit()
             self.goals_dict[self.current_goal_id].setData(goal_data)
         else:
             QMessageBox.warning(self, "Fill cells to save the goal", "Not all the required cells were filled")
@@ -548,30 +737,31 @@ class GoalTab(QWidget):
 class StatisticsTab(QWidget):
     def __init__(self):
         super().__init__()
-        self.x = 3
-        self.y = 6
+        self.traces = []
 
         self.fig = go.Figure()
         self.fig.update_layout(
-            xaxis=dict(gridcolor='#444444', color='white', title='Dates', type='date'),
-            yaxis=dict(title="yaxis title", gridcolor='#444444', tickfont=dict(color='white')),
-            paper_bgcolor='black',
-            plot_bgcolor='black',
-            legend_font_color='white')
+        xaxis=dict(gridcolor='#444444', color='white', title='Dates', type='date'),
+        yaxis=dict(title='Numeric', gridcolor='#444444', color='#FFFFFF',),
+        yaxis2=dict(title='Letteric', overlaying='y', gridcolor='#444444', color='#FFD300', type="category", categoryorder="category descending"),
+        yaxis3=dict(title='%', overlaying='y', side='right', gridcolor='#444444', color='#00FFFF'),
+        paper_bgcolor='black',
+        plot_bgcolor='black',
+        legend_font_color='white')
+
         self.stats_view = ws.PlotlyViewer(self.fig)
         self.stats_view.setFixedSize(1500, 825)
         graphs_label = QLabel("Graphs")
         graphs_label.setFont(QFont("Calibri", 24))
-        graphs_list_widget = QListWidget()
+        self.graphs_list_widget = QListWidget()
         
-        standard_graphs = ["Mental state", "Physical state", "Work time", "Shedule completing, %", "Shedule completing accuracy, %", "Day rating"]
+        standard_graphs = DataManager.loadMainData("graphs")
+        self.standard_graphs_names = []
+        self.standard_graphs_types = []
         for graph in standard_graphs:
-            graph_item = ws.GraphItem(graph)
-            graph_item.toggled.connect(self.display_graph)
-            list_widget_item = QListWidgetItem(graphs_list_widget)
-            list_widget_item.setSizeHint(graph_item.sizeHint())
-            graphs_list_widget.addItem(list_widget_item)
-            graphs_list_widget.setItemWidget(list_widget_item, graph_item)
+            self.standard_graphs_names.append(graph[0])
+            self.standard_graphs_types.append(graph[1])
+            self.add_graph(graph[0], None, graph[1])
 
         line_edit = QLineEdit()
         line_edit.setPlaceholderText("Add graph...")
@@ -584,7 +774,7 @@ class StatisticsTab(QWidget):
 
         graphs_v_box = QVBoxLayout()
         graphs_v_box.addWidget(graphs_label)
-        graphs_v_box.addWidget(graphs_list_widget)
+        graphs_v_box.addWidget(self.graphs_list_widget)
         graphs_v_box.addSpacing(20)
         graphs_v_box.addWidget(line_edit)
         graphs_v_box.addStretch()
@@ -609,35 +799,32 @@ class StatisticsTab(QWidget):
 
         self.setLayout(main_h_box)
 
-        object_manager = ws.ObjectManager(self, line_edit)
+        self.object_manager = ws.ObjectManager(self, line_edit, ["Goals", "Skills", "Graphs"])
+        self.object_manager.selected.connect(self.add_graph)
 
-    def display_graph(self, graph_name, state):
-        self.fig.add_trace(go.Scatter(
-            x=[1, 2, 3],
-            y=[4, 5, 6],
-            name="yaxis 1 data"))
-        self.fig.add_trace(go.Scatter(
-            x=[1, 2, 3],
-            y=[0.4, 0.5, 0.6],
-            name="yaxis 1 data", yaxis='y2'))
-        self.fig.add_trace(go.Scatter(
-            x=[1, 2, 3],
-            y=[0.04, 0.05, 0.06],
-            name="yaxis 1 data", yaxis='y3'))
+    def display_graph(self, graph_name, value_type, x, y, state):
+        if state == 2:
+            if value_type == "Numeric":
+                yaxis = "y1"
+            elif value_type == "Letteric":
+                yaxis = "y2"
+            elif value_type == "%":
+                yaxis = "y3"
 
-        self.fig.update_layout(
-        yaxis=dict(
-        title='Numeric', gridcolor='#444444', color='#FFFFFF',),
-        yaxis2=dict(
-            title='Letteric',
-            overlaying='y',
-            gridcolor='#444444', 
-            color='#FFD300',
-            type="category"),
-        yaxis3=dict(
-        title='%',
-        overlaying='y', 
-        side='right',
-        gridcolor='#444444', color='#00FFFF'))
+            self.fig.add_trace(go.Scatter(x=x, y=y, name=graph_name, yaxis=yaxis))
+            self.traces.append(graph_name)
+            self.stats_view.set_figure(self.fig)
+        else:
+            data = list(self.fig.data)
+            data.pop(self.traces.index(graph_name))
+            self.fig.data = data
+            self.traces.remove(graph_name)
+            self.stats_view.set_figure(self.fig)
 
-        self.stats_view.set_figure(self.fig)
+    def add_graph(self, name, goal_id, obj_type):
+        widget = ws.GraphItem(name, goal_id, obj_type)
+        widget.toggled.connect(self.display_graph)
+        item = QListWidgetItem()
+        item.setSizeHint(widget.sizeHint())
+        self.graphs_list_widget.addItem(item)
+        self.graphs_list_widget.setItemWidget(widget)
