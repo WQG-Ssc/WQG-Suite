@@ -366,3 +366,14 @@ FodyWeavers.xsd
 /WQG Suite/Files/data/main.db
 /WQG Suite/DataManager.py
 /WQG Suite/Files/icons/Authors.txt
+/WQG Suite/Files/icons/Branches.png
+/WQG Suite/Files/icons/Characteristics.png
+/WQG Suite/Files/icons/Goals tab.png
+/WQG Suite/Files/icons/Goals.png
+/WQG Suite/Files/icons/Graphs.png
+/WQG Suite/Files/icons/rb checked.png
+/WQG Suite/Files/icons/rb disabled.png
+/WQG Suite/Files/icons/rb unchecked.png
+/WQG Suite/Files/icons/search.png
+/WQG Suite/Files/icons/Skills.png
+/WQG Suite/Files/data/main_test.db
