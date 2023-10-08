@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBo
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
 from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from typing import Union
 import tempfile
 from plotly.io import to_html
 import plotly.graph_objs as go
@@ -263,43 +264,6 @@ class GoalProgressBar(QProgressBar):
         self.goal_progress = goal_progress
         self.d_diff = d_diff
         self.setUpProgressBar()
-
-def getGoalColor(d_diff):
-    previous_key = -1
-    keys = color_scale.keys()
-    if d_diff > 1200:
-        color_key = 1201
-    for key in keys:
-        if key >= d_diff > previous_key:
-            color_key = key
-            break
-        previous_key = key
-    return color_scale[color_key]
-
-color_scale = {
-    0.5: "#15ff00",
-    1: "#43ff00",
-    2: "#7dff00",
-    3: "#b3ff00",
-    5: "#d4fd00",
-    10: "#eafb00",
-    15: "#f7f500",
-    20: "#ffea00",
-    30: "#ffda00",
-    40: "#ffc900",
-    50: "#ffaf00",
-    75: "#ff8b00",
-    100: "#ff5b00",
-    150: "#ff2600",
-    200: "#ff0100",
-    300: "#de0038",
-    400: "#a70094",
-    500: "#7100e7",
-    750: "#4d2bff",
-    1000: "#347cff",
-    1200: "#20d3ff",
-    1201: "#00ffff"
-}
         
 class AdditionalImagesLabel(QLabel):
     imageRemoved = pyqtSignal()
@@ -626,10 +590,12 @@ class PlotlyViewer(QWebEngineView):
         pass#dialog = QFileDialog()path, _ = dialog.getSaveFileName(self, "Save File", os.path.join(os.getcwd(), "statistics.png"), "*.png")if path:    download.setPath(path)    download.accept()
 
 class GraphItem(QWidget):
-    toggled = pyqtSignal(str, str, list, list, int)
+    toggled = pyqtSignal(str, str, list, list, int, str)
+    removed = pyqtSignal(QWidget)
     def __init__(self, name, graph_type, goal_id, value_type):
         super().__init__()
         self.name = name
+        self.goal_id = goal_id
         self.value_type = value_type
         self.graph_type = graph_type
         self.value_mode = "Per day"
@@ -647,20 +613,21 @@ class GraphItem(QWidget):
 
         if self.graph_type != "standard":
             remove_graph = QPushButton()
+            remove_graph.clicked.connect(lambda: self.removed.emit(self))
             remove_graph.setIcon(QIcon(r"Files\icons\remove.png"))
             remove_graph.setFixedSize(13, 13)
             remove_graph.setIconSize(QSize(13, 13))
             remove_graph.setObjectName("Tool")
 
-            if self.graph_type == "goal":
-                cc_stats = DataManager.loadMainData("goal_custom", goal_id)# cc: date value, date value,|
+            if self.graph_type == "Goals":
+                cc_stats = DataManager.loadMainData("goal_custom", self.goal_id)[0]# cc: date value, date value,|
                 cc_stats = cc_stats.split("|")
                 self.cc_stats_dict = {}
                 for cc in cc_stats:
                     cc = cc.split(":")
                     self.cc_stats_dict[cc[0]] = cc[1].split(",")
 
-                self.cc_names = self.cc_stats_dict.keys()
+                self.cc_names = list(self.cc_stats_dict.keys())
 
                 self.showing_charact_switcher = QPushButton(self.showing_charact)
                 self.showing_charact_switcher.clicked.connect(self.switch_showing_charact)
@@ -673,12 +640,13 @@ class GraphItem(QWidget):
         self.setLayout(h_box)
 
     def graph_toggled(self, state):
+        color = ""
         if state == 1:
-            self.toggled.emit(self.name, None, None, None, state)
+            self.toggled.emit(self.name, "", [], [], state, color)
         else:
             self.x = []
             self.y = []
-            if self.graph_type == "goal":
+            if self.graph_type == "Goals":
                 if self.showing_charact == "h":
                     stat = DataManager.loadMainData("statistics", self.goal_id)
                     previous_date = ""
@@ -686,7 +654,7 @@ class GraphItem(QWidget):
                         start_time = calculate_msecs(s[0])
                         end_time = calculate_msecs(s[1])
                         record_time = end_time - start_time
-                        record_time /= 3600
+                        record_time /= 3600000
                         date = s[2]
                         if date not in self.x:
                             self.x.append(date)
@@ -701,8 +669,9 @@ class GraphItem(QWidget):
                         s = s.split(" ")
                         self.x.append(s[0])
                         self.y.append(s[1])
-            elif self.graph_type == "skill":
+            elif self.graph_type == "Skills":
                 stat = DataManager.loadMainData("skill_stat", self.name)
+                print(stat)
                 for s in stat:
                     self.x.append(s[0])
                     self.y.append(s[1])
@@ -711,20 +680,16 @@ class GraphItem(QWidget):
                 for s in stat:
                     self.x.append(s[0])
                     self.y.append(s[1])
-
+                color = DataManager.loadMainData("graph_color", self.name)[0]
             if self.value_mode == "All time":
                 counter = 0
                 y = []
                 for val in self.y:
-                    counter += val
+                    counter += float(val)
                     y.append(counter)
                 self.y = [item for item in y]
-            
-            self.toggled.emit(self.name, self.value_type, self.x, self.y, state)
 
-        def calculate_msecs(self, interval_str):
-            time_list = interval_str.split(":")
-            return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000
+            self.toggled.emit(self.name, self.value_type, self.x, self.y, state, color)
 
     def switch_val_mode(self, state):
         if state:
@@ -733,24 +698,24 @@ class GraphItem(QWidget):
         else:
             self.value_mode_switcher.setText("Per day")
             self.value_mode = "Per day"
-        self.graph_toggled(1)#Delete graph and then display updated
-        self.graph_toggled(2)
+        if self.show_checkbox.isChecked():
+            self.graph_toggled(1)#Delete graph and then display updated
+            self.graph_toggled(2)
 
     def switch_showing_charact(self):
-        if self.sct_state == len(self.cc_names):
+        if self.sct_state == len(self.cc_names) + 1:
             self.sct_state = 1
         else:
             self.sct_state += 1
         if self.sct_state == 1:
             self.showing_charact = "h"
             self.showing_charact_switcher.setText(self.showing_charact)
-            self.value_type = "Numeric"
         else:
             self.showing_charact = self.cc_names[self.sct_state - 2]
             self.showing_charact_switcher.setText(self.showing_charact)
-            self.value_type = DataManager.loadMainData("characteristic", self.showing_charact)
-        self.graph_toggled(1)
-        self.graph_toggled(2)
+        if self.show_checkbox.isChecked():
+            self.graph_toggled(1)
+            self.graph_toggled(2)
 
 class ObjectManager(QWidget):
     selected = pyqtSignal(str, str, str)
@@ -848,10 +813,10 @@ class ObjectManager(QWidget):
         self.data = {}
         for data_type in self.s_filter:
             names = DataManager.loadMainData("names", data_type)
-            names = [item[0] for item in names]
-            if data_type == "Goals":
-                self.goals_ids = [item[1] for item in names]
             if names:
+                if data_type == "Goals":
+                    self.goals_ids = [item[1] for item in names]
+                names = [item[0] for item in names]
                 self.data[data_type] = names
 
     def filter_search(self, button, toggled):
@@ -892,3 +857,44 @@ class SkillCharactWidget(QWidget):
         h_box.addWidget(self.delete_button)
         self.setLayout(h_box)
         self.setFixedWidth(250)
+
+def getGoalColor(d_diff):
+    previous_key = -1
+    keys = color_scale.keys()
+    if d_diff > 1200:
+        color_key = 1201
+    for key in keys:
+        if key >= d_diff > previous_key:
+            color_key = key
+            break
+        previous_key = key
+    return color_scale[color_key]
+
+color_scale = {
+    0.5: "#15ff00",
+    1: "#43ff00",
+    2: "#7dff00",
+    3: "#b3ff00",
+    5: "#d4fd00",
+    10: "#eafb00",
+    15: "#f7f500",
+    20: "#ffea00",
+    30: "#ffda00",
+    40: "#ffc900",
+    50: "#ffaf00",
+    75: "#ff8b00",
+    100: "#ff5b00",
+    150: "#ff2600",
+    200: "#ff0100",
+    300: "#de0038",
+    400: "#a70094",
+    500: "#7100e7",
+    750: "#4d2bff",
+    1000: "#347cff",
+    1200: "#20d3ff",
+    1201: "#00ffff"
+}
+
+def calculate_msecs(interval_str):
+    time_list = interval_str.split(":")
+    return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000

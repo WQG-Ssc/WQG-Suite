@@ -18,15 +18,9 @@ def loadMainData(data_type, *args):
 
     if data_type == "branches":
         cur.execute("SELECT name FROM Branches")
-        branches = cur.fetchall()
-        conn.close()
-        return branches
 
     if data_type == "goals":
         cur.execute(f"SELECT name, total_difficulty, time, benefit, limit_date, priority, state, ID, files, progress, custom_characteristics FROM Goals WHERE ID LIKE '{args[0]}.%' ORDER BY ID")
-        goals = cur.fetchall()
-        conn.close()
-        return goals
 
     if data_type == "goal":
         cur.execute("SELECT * FROM Goals WHERE ID == ?", args)
@@ -36,62 +30,49 @@ def loadMainData(data_type, *args):
 
     if data_type == "branch":
         cur.execute("SELECT name FROM Branches WHERE RowID == ?", args)
-        branch_name = cur.fetchone()[0]
+        branch_name = cur.fetchone()
         conn.close()
         return branch_name
 
     if data_type == "skills":
         cur.execute("SELECT * FROM Skills")
-        skills = cur.fetchall()
-        conn.close()
-        return skills
 
     if data_type == "day_stats":
         cur.execute(f"SELECT date, [{args[0]}] FROM Days")
-        stats = cur.fetchall()
-        conn.close()
-        return stats
 
     if data_type == "names":
         if args[0] == "Goals":
             cur.execute(f"SELECT name, ID FROM Goals")
         else:
             cur.execute(f"SELECT name FROM {args[0]}")
-        names = cur.fetchall()
-        conn.close()
-        return names
     
     if data_type == "graphs":
         cur.execute("SELECT * FROM Graphs")
-        graphs = cur.fetchall()
-        conn.close()
-        return graphs
 
     if data_type == "goal_custom":#Custom characteristics
         cur.execute("SELECT cc_stats FROM Goals WHERE ID == ?", (args))
-        cc_stats = cur.fetchall()
+        cc_stats = cur.fetchone()
         conn.close()
         return cc_stats
 
     if data_type == "characteristic":
-        cur.execute("SELECT type FROM Characteristics WHERE name == ?", (args))
-        c_type = cur.fetchall()
-        conn.close()
-        return c_type
+        cur.execute("SELECT c_type, v_type, c_values, is_showing_in_gl FROM Characteristics WHERE name == ?", (args))
 
     if data_type == "skill_stat":
-        cur.execute("SELECT RowID FROM Skills WHERE name = ?", args)
-        skill_id = cur.fetchone()[0]
-        cur.execute(f"SELECT date, {skill_id} FROM Skills_statistics WHERE {skill_id} IS NOT NULL")
-        stat = cur.fetchall()
-        conn.close()
-        return stat
+        cur.execute(f"SELECT date, [{args[0]}] FROM Skills_statistics WHERE '{args[0]}' IS NOT NULL")
 
     if data_type == "statistics":
-        cur.execute("SELECT date, start_time, end_time FROM Main_statistics WHERE task_ID == ?", args)
-        stat = cur.fetchall()
+        cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID == ?", args)
+
+    if data_type == "graph_color":
+        cur.execute("SELECT color FROM Graphs WHERE name == ?", args)
+        color = cur.fetchone()
         conn.close()
-        return stat
+        return color
+
+    data = cur.fetchall()
+    conn.close()
+    return data
 
 @exception_handler
 def saveMainData(data_type, args):
@@ -102,9 +83,8 @@ def saveMainData(data_type, args):
     if data_type == "goal":
         cur.execute("INSERT INTO Goals (ID, name, total_difficulty, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
     if data_type == "skill":
-        cur.execute(f"INSERT INTO Skills (name) VALUES ('{args[0]}')")
-        cur.execute("SELECT RowID FROM Skills WHERE name = ?", (args,))
-        cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{cur.fetchone()[0]}' REAL")
+        cur.execute(f"INSERT INTO Skills (name) VALUES ('{args}')")
+        cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{args}' REAL")
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type, c_values, showing_in_gl) VALUES (?, ?, ?, ?, ?)", args)
     conn.commit()

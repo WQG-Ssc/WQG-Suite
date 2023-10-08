@@ -185,7 +185,7 @@ class GoalTab(QWidget):
     def __init__(self, branch_id, item=None):
         super().__init__()
         self.branch_id = str(branch_id)
-        self.branch_name = DataManager.loadMainData("branch", branch_id)
+        self.branch_name = DataManager.loadMainData("branch", branch_id)[0]
         self.item = item
 
         goal_characts = ["Total difficulty:", "Time:", "Benefit:", "Limit date:", "Priority:"]
@@ -459,7 +459,10 @@ class GoalTab(QWidget):
         self.v_box.addStretch()
 
         if object_manager.isSelected:
-            charact_edit.setText(line_edit.text())
+            charact_name = line_edit.text()
+            charact_edit.setText(charact_name)
+            charact_info = DataManager.loadMainData("characteristics", charact_name)
+
             charact_edit.setReadOnly(True)
 
         ok_button = QPushButton("OK")
@@ -478,11 +481,10 @@ class GoalTab(QWidget):
         value_type = self.value_type_group.checkedButton().text()
         is_showing = is_showing_cb.isChecked()
         if charact_name and charact_type and value_type:
-            if charact_type == "static":
-                if value_type == "quantitative":
-                    value = self.min_val_edit.text() + " " + self.max_val_edit.text()
-                else:
-                    value = self.scale_vals_edit.text()
+            if value_type == "quantitative":
+                value = self.min_val_edit.text() + " " + self.max_val_edit.text()
+            else:
+                value = self.scale_vals_edit.text()
             if obj_manager.isSelected:
                 DataManager.updateMainData("Characteristics", [charact_type, value_type, value, is_showing, charact_name])
             else:
@@ -738,11 +740,13 @@ class StatisticsTab(QWidget):
     def __init__(self):
         super().__init__()
         self.traces = []
+        self.graphs = {"Goals":[], "Skills":[], "standard":[]}
+        self.standard_colors = {}
 
         self.fig = go.Figure()
         self.fig.update_layout(
         xaxis=dict(gridcolor='#444444', color='white', title='Dates', type='date'),
-        yaxis=dict(title='Numeric', gridcolor='#444444', color='#FFFFFF',),
+        yaxis=dict(title='Numeric', gridcolor='#444444', color='#FFFFFF', type='linear'),
         yaxis2=dict(title='Letteric', overlaying='y', gridcolor='#444444', color='#FFD300', type="category", categoryorder="category descending"),
         yaxis3=dict(title='%', overlaying='y', side='right', gridcolor='#444444', color='#00FFFF'),
         paper_bgcolor='black',
@@ -756,15 +760,12 @@ class StatisticsTab(QWidget):
         self.graphs_list_widget = QListWidget()
         
         standard_graphs = DataManager.loadMainData("graphs")
-        self.standard_graphs_names = []
-        self.standard_graphs_types = []
         for graph in standard_graphs:
-            self.standard_graphs_names.append(graph[0])
-            self.standard_graphs_types.append(graph[1])
-            self.add_graph(graph[0], None, graph[1])
+            self.add_graph(graph[0], None, "standard", graph[1])
+            self.standard_colors[graph[0]] = graph[2]
 
-        line_edit = QLineEdit()
-        line_edit.setPlaceholderText("Add graph...")
+        self.line_edit = QLineEdit()
+        self.line_edit.setPlaceholderText("Add graph...")
 
         period_label_1 = QLabel("Viewing period: from:")
         period_label_2 = QLabel("to:")
@@ -776,7 +777,7 @@ class StatisticsTab(QWidget):
         graphs_v_box.addWidget(graphs_label)
         graphs_v_box.addWidget(self.graphs_list_widget)
         graphs_v_box.addSpacing(20)
-        graphs_v_box.addWidget(line_edit)
+        graphs_v_box.addWidget(self.line_edit)
         graphs_v_box.addStretch()
 
         period_h_box = QHBoxLayout()
@@ -799,19 +800,22 @@ class StatisticsTab(QWidget):
 
         self.setLayout(main_h_box)
 
-        self.object_manager = ws.ObjectManager(self, line_edit, ["Goals", "Skills", "Graphs"])
+        self.object_manager = ws.ObjectManager(self, self.line_edit, ["Goals", "Skills", "Graphs"])
         self.object_manager.selected.connect(self.add_graph)
 
-    def display_graph(self, graph_name, value_type, x, y, state):
+    def display_graph(self, graph_name, value_type, x, y, state, color):
         if state == 2:
             if value_type == "Numeric":
-                yaxis = "y1"
+                yaxis = "y"
             elif value_type == "Letteric":
                 yaxis = "y2"
             elif value_type == "%":
                 yaxis = "y3"
 
-            self.fig.add_trace(go.Scatter(x=x, y=y, name=graph_name, yaxis=yaxis))
+            if color:
+                self.fig.add_trace(go.Scatter(x=x, y=y, name=graph_name, yaxis=yaxis, line=dict(color=color)))
+            else:
+                self.fig.add_trace(go.Scatter(x=x, y=y, name=graph_name, yaxis=yaxis))
             self.traces.append(graph_name)
             self.stats_view.set_figure(self.fig)
         else:
@@ -821,10 +825,32 @@ class StatisticsTab(QWidget):
             self.traces.remove(graph_name)
             self.stats_view.set_figure(self.fig)
 
-    def add_graph(self, name, goal_id, obj_type):
-        widget = ws.GraphItem(name, goal_id, obj_type)
-        widget.toggled.connect(self.display_graph)
-        item = QListWidgetItem()
-        item.setSizeHint(widget.sizeHint())
-        self.graphs_list_widget.addItem(item)
-        self.graphs_list_widget.setItemWidget(widget)
+    def add_graph(self, name, goal_id, obj_type, value_type=None):
+        if not value_type:
+            self.line_edit.clear()
+        if (obj_type == "Goals" and goal_id not in self.graphs[obj_type]) or (obj_type != "Goals" and name not in self.graphs[obj_type]):
+            if obj_type == "Goals":
+                self.graphs[obj_type].append(goal_id)
+            else:
+                self.graphs[obj_type].append(name)
+            widget = ws.GraphItem(name, obj_type, goal_id, value_type)
+            widget.toggled.connect(self.display_graph)
+            widget.removed.connect(self.remove_graph)
+            item = QListWidgetItem()
+            item.setSizeHint(widget.sizeHint())
+            self.graphs_list_widget.addItem(item)
+            self.graphs_list_widget.setItemWidget(item, widget)
+
+    def remove_graph(self, graph_widget):
+        for i in range(self.graphs_list_widget.count()):
+            item = self.graphs_list_widget.item(i)
+            widget = self.graphs_list_widget.itemWidget(item)
+            if widget.name == graph_widget.name and widget.graph_type == graph_widget.graph_type:
+                self.graphs_list_widget.takeItem(i)
+                if graph_widget.graph_type == "Goals":
+                    self.graphs[widget.graph_type].remove(graph_widget.goal_id)
+                else:
+                    self.graphs[widget.graph_type].remove(graph_widget.name)
+                if widget.show_checkbox.isChecked():
+                    self.display_graph(graph_widget.name, None, None, None, 1, None)
+                break
