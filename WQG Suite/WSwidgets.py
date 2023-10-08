@@ -671,7 +671,6 @@ class GraphItem(QWidget):
                         self.y.append(s[1])
             elif self.graph_type == "Skills":
                 stat = DataManager.loadMainData("skill_stat", self.name)
-                print(stat)
                 for s in stat:
                     self.x.append(s[0])
                     self.y.append(s[1])
