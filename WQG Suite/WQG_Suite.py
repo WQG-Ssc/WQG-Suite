@@ -25,12 +25,12 @@ class MainWindow(QMainWindow):
             conn = sql.connect(main_db)
             cur = conn.cursor()
             cur.execute("CREATE TABLE Main_statistics (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT)")
-            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, total_difficulty INTEGER, time REAl, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats)")
+            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, is_group INTEGER, showing_in_list INTEGER)")
             cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
             cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT)")
             cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
-            cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT, c_values TEXT, showing_in_gl BOOL)")
+            cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT, c_values TEXT, showing_in_gl INTEGER)")
             cur.execute("CREATE TABLE Skills_statistics (date TEXT)")
             conn.commit()
             conn.close()
@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("WQG's Suite")
         self.setWindowIcon(QIcon("Files\Icon.png"))
         self.anyChangesMade = False
+        self.isGoalListNeedsToBeUpdated = False
         self.showAnimation()
         self.setUpMainWindow()
 
@@ -235,11 +236,12 @@ class MainWindow(QMainWindow):
         if self.stacked_widget.currentIndex() > 0:
             current_widget = self.stacked_widget.currentWidget()
             if self.anyChangesMade:
-                self.anyChangesMade = False
-                prev_widget = self.stacked_widget.widget(self.stacked_widget.currentIndex() - 1)
                 current_widget.saveData()
-                if not current_widget.areChangesMade:
-                    prev_widget.updateWidget()
+                self.anyChangesMade = False
+            if self.isGoalListNeedsToBeUpdated:
+                prev_widget = self.stacked_widget.widget(self.stacked_widget.currentIndex() - 1)
+                prev_widget.updateWidget()
+                self.isGoalListNeedsToBeUpdated = False
             self.stacked_widget.removeWidget(current_widget)
             current_widget.deleteLater()
 
@@ -343,9 +345,14 @@ class MainWindow(QMainWindow):
         goal_tab = wstabs.GoalTab(self.current_branch_id, item)
         goal_tab.changesMade.connect(self.changesMade)
         goal_tab.changesSaved.connect(self.changesSaved)
+        goal_tab.previous_window_req.connect(self.previous_window)
+        goal_tab.goal_list_update_req.connect(self.goalListUpdate)
 
         self.stacked_widget.addWidget(goal_tab)
         self.next_window()
+
+    def goalListUpdate(self):
+        self.isGoalListNeedsToBeUpdated = True
 
     def changesMade(self):
         self.anyChangesMade = True

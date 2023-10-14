@@ -857,6 +857,9 @@ class SkillCharactWidget(QWidget):
         self.setLayout(h_box)
         self.setFixedWidth(250)
 
+    def setReadOnly(self):
+        self.value_edit.setReadOnly(True)
+
 def getGoalColor(d_diff):
     previous_key = -1
     keys = color_scale.keys()

@@ -114,4 +114,11 @@ QRadioButton::indicator::disabled{
 QRadioButton::disabled{
     color: gray
     }
+QComboBox{
+    color: #FFD300;
+    border: 1px solid #FFD300;
+    }
+QComboBox QAbstractItemView {
+    color: #FFD300
+    }
 """
