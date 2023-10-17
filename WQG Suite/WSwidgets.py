@@ -452,13 +452,14 @@ class AddtionalImagesWindow(QWidget):
 class GoalTreeItem(QWidget):
     subgoalAdded = pyqtSignal(str)
     goalDeleted = pyqtSignal(str)
-    def __init__(self, goal_id, goal_name, d_diff, goal_progress, isMain):
+    def __init__(self, goal_id, goal_name, d_diff, goal_progress, isMain, isGroup):
         super().__init__()
         self.goal_id = goal_id
         self.goal_name = goal_name
         self.d_diff = d_diff
         self.goal_progress = goal_progress
         self.isMain = isMain
+        self.isGroup = isGroup
         self.arrangeWidgets()
         self.add_act = QAction("Add subgoal")
         self.add_act.triggered.connect(self.add_subgoal)
@@ -483,17 +484,19 @@ class GoalTreeItem(QWidget):
         if QMessageBox.question(self, "Delete goal", "Do you want to delete this goal?") == QMessageBox.StandardButton.Yes:
             self.goalDeleted.emit(self.goal_id)
 
-    def updateWidget(self, goal_id, goal_name, d_diff, goal_progress):
+    def updateWidget(self, goal_id, goal_name, d_diff, goal_progress, isGroup):
         self.goal_id = goal_id
         self.goal_name = goal_name
         self.d_diff = d_diff
+        self.isGroup = isGroup
         self.goal_progress = goal_progress
         self.label.setText(self.goal_id + " " + self.goal_name)
         self.icon.updateGoalProgressBar(self.goal_progress, self.d_diff)
 
     def contextMenuEvent(self, event):
         menu = QMenu()
-        menu.addAction(self.add_act)
+        if self.isGroup:
+            menu.addAction(self.add_act)
         menu.addAction(self.delete_act)
         menu.exec(self.mapToGlobal(event.pos()))
 
@@ -554,10 +557,6 @@ class SkillWidget(QWidget):
         super().__init__()
         self.skill_name = skill_name
         self.skill_progress = skill_progress
-        self.arrangeWidgets()
-
-    def arrangeWidgets(self):
-        pass
 
 class PlotlyViewer(QWebEngineView):
     def __init__(self, fig=None):
@@ -839,11 +838,11 @@ class ListWidgetItem(QListWidgetItem):
         self.setText(text)
 
 class SkillCharactWidget(QWidget):
-    def __init__(self, text, value):
+    def __init__(self, text, value, data_type):
         super().__init__()
         label = QLabel(text)
+        self.data_type = data_type
         self.delete_button = QPushButton()
-            
         self.delete_button.setIcon(QIcon(r"Files\icons\remove.png"))
         self.delete_button.setObjectName("Tool")
         self.delete_button.setFixedSize(20, 20)
@@ -859,6 +858,8 @@ class SkillCharactWidget(QWidget):
 
     def setReadOnly(self):
         self.value_edit.setReadOnly(True)
+        if self.data_type == "Skills":
+            self.delete_button.setDisabled(True)
 
 def getGoalColor(d_diff):
     previous_key = -1

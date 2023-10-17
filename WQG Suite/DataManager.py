@@ -1,4 +1,5 @@
 import sqlite3 as sql
+import re
 main_db = r"Files\data\main_test.db"
 other_db = r"Files\data\other.db"
 
@@ -73,14 +74,6 @@ def loadMainData(data_type, *args):
         conn.close()
         return color
 
-    if data_type == "check supergoal":
-        cur.execute("SELECT is_group FROM Goals WHERE ID == ?", args)
-        isGroup = cur.fetchone()
-        if isGroup:
-            isGroup = isGroup[0]
-        conn.close()
-        return isGroup
-
     data = cur.fetchall()
     conn.close()
     return data
@@ -106,59 +99,117 @@ def saveMainData(data_type, args):
     conn.close()
 
 @exception_handler
-def recalculateValues(supergoal_id, time_charact, used_skills, goal_characts={}):
+def recalculateValues(layer):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    isSupergoalHasSameCharact = False
-    cur.execute("SELECT used_skills FROM Goals WHERE ID == ?", (supergoal_id,))
-    supergoal_skills = cur.fetchone()[0]
-    if supergoal_skills:
-        supergoal_skills = supergoal_skills.split(",")
-        skills = supergoal_skills + used_skills
-    else:
-        skills = used_skills
+    supergoal_id = ".".join(layer[:-1])
+
+    print(f"supergoal_id:{supergoal_id}")
+    cur.execute("SELECT custom_characteristics FROM Goals WHERE ID == ?", (supergoal_id,))
+    characts = cur.fetchone()[0]
+    print(f"characts:{characts}")
+    charactsToRecalc = []
+    allCharacts = {}
+    if characts:
+        characts = characts.split(",")
+        for charact in characts:
+            charact, value = charact.split(":")
+            if loadMainData("characteristic", charact)[0] == "dynamic":
+                allCharacts[charact] = 0
+                charactsToRecalc.append(charact)
+            else:
+                allCharacts[charact] = value
+
+    cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{supergoal_id}.%'")
+    raw_ids = cur.fetchall()
+
+    ids = [item[0] for item in raw_ids]
+    print(f"ids:{ids}")
+    regex = re.compile(f"^{supergoal_id}\.[^.]+$")
+    layer_length = len([item for item in ids if regex.match(item)])
+
+    print(f"layer_length: {layer_length}")
+
+    print(f"charactsToRecalc{charactsToRecalc}")
 
     skills_dict = {}
-    for skill in skills:
-        skill = skill.split(":")
-        if skill[0] in skills_dict:
-            skills_dict[skill[0]] += float(skill[1])
-        else:
-            skills_dict[skill[0]] = float(skill[1])
+    cc_stats_dict = {}
+    time = 0.0
 
-    all_used_skills = ""
-    for skill in skills_dict.keys():
-        all_used_skills += f"{skill}:{skills_dict[skill]},"
-    all_used_skills = all_used_skills.rstrip(",")
+    skills = ""
+    ccs = ""
+    cc_stats = ""
 
-    if goal_characts:
-        cur.execute("SELECT custom_characteristics FROM Goals WHERE ID == ?", (supergoal_id,))
-        supergoal_ccs = cur.fetchone()
-        if supergoal_ccs:
-            supergoal_ccs = supergoal_ccs[0].split(",")
-            supergoal_ccs_dict = {}
+    if layer_length:
+        for goal in range(1, layer_length + 1):
+            goal_id = ".".join(layer[:-1] + [str(goal)])
+            print(f"selected id:{goal_id}")
+            if charactsToRecalc:
+                cur.execute("SELECT used_skills, time, custom_characteristics, cc_stats FROM Goals WHERE ID == ?", (goal_id,))
+            else:
+                cur.execute("SELECT used_skills, time FROM Goals WHERE ID == ?", (goal_id,))
 
-            for cc in supergoal_ccs:
-                cc = cc.split(":")
-                c_type = loadMainData("characteristic", cc[0])[0]
+            goal_data = cur.fetchone()
+            print(f"goal_data:{goal_data}")
+            if goal_data[0]:
+                for skill in goal_data[0].split(","):
+                    skill_name, value = skill.split(":")
+                    if skill_name in skills_dict:
+                        skills_dict[skill_name] += float(value)
+                    else:
+                        skills_dict[skill_name] = float(value)
 
-                if c_type == "dynamic" and cc[0] in goal_characts.keys():
-                    charact_value = float(goal_characts[cc[0]]) + float(cc[1])
-                    supergoal_ccs_dict[cc[0]] = charact_value
-                    isSupergoalHasSameCharact = True
-                else:
-                    supergoal_ccs_dict[cc[0]] = cc[1]
+                time += goal_data[1]
+                if charactsToRecalc and goal_data[2]:
+                    for charact in goal_data[2].split(","):
+                        charact_name, value = charact.split(":")
+                        if charact_name in charactsToRecalc:
+                            allCharacts[charact_name] += float(value)
 
-            ccs = ""
-            for cc in supergoal_ccs_dict.keys():
-                ccs += cc + ":" + str(supergoal_ccs_dict[cc]) + ","
-            ccs = ccs.rstrip(",")
-            cur.execute("UPDATE Goals SET time = time + ?, used_skills = ?, custom_characteristics = ? WHERE ID == ?", (time_charact, all_used_skills, ccs, supergoal_id))
+                    if goal_data[3]:
+                        for stat in goal_data[3].split("|"):
+                            charact_name, stats = stat.split(":")
+                            if charact_name in charactsToRecalc:
+                                for record in stats.split(","):
+                                    date, value = record.split(" ")
+                                    if date in cc_stats_dict[charact_name][date]:
+                                        cc_stats_dict[charact_name][date] += float(value)
+                                    else:
+                                        cc_stats_dict[charact_name][date] = float(value)
+
+        if skills_dict:
+            for skill in skills_dict.keys():
+                skills += f"{skill}:{skills_dict[skill]},"
+            skills = skills.rstrip(",")
+
+            print(f"skills:{skills}")
+            print(f"time:{time}")
+
+            if cc_stats_dict:
+                for charact in cc_stats_dict.keys():
+                    records = ""
+                    for date in cc_stats_dict[charact].keys():
+                        records += f"{date}:{cc_stats_dict[charact][date]}"
+                    cc_stats += f"{charact}:{records}|"
+                cc_stats.rstrip("|")
     else:
-        cur.execute("UPDATE Goals SET time = time + ? , used_skills = ? WHERE ID == ?", (time_charact, all_used_skills, supergoal_id))
+        for dynamic_cc in charactsToRecalc:
+            allCharacts.pop(dynamic_cc)
+
+    if allCharacts:
+        for cc in allCharacts.keys():
+            ccs += cc + ":" + str(allCharacts[cc]) + ","
+        ccs = ccs.rstrip(",")
+
+    if charactsToRecalc:
+        cur.execute("UPDATE Goals SET used_skills = ?, time = ?, custom_characteristics = ?, cc_stats = ? WHERE ID == ?", (skills, time, ccs, cc_stats, supergoal_id))
+        print(f"ccs:{ccs}")
+        print(f"cc_stats:{cc_stats}")
+    else:
+        cur.execute("UPDATE Goals SET used_skills = ?, time = ? WHERE ID == ?", (skills, time, supergoal_id))
+
     conn.commit()
     conn.close()
-    return isSupergoalHasSameCharact
 
 @exception_handler
 def updateMainData(data_type, args):
@@ -171,7 +222,7 @@ def updateMainData(data_type, args):
     if data_type == "skill":
         cur.execute("UPDATE Skills SET name = ? WHERE name = ?", (args,))
     if data_type == "Characteristics":
-        cur.execute("UPDATE Characteristics SET c_type = ?, v_type = ?, c_value = ?, showing_in_gl = ? WHERE name == ?", args)
+        cur.execute("UPDATE Characteristics SET c_type = ?, v_type = ?, c_values = ?, showing_in_gl = ? WHERE name == ?", args)
     conn.commit()
     conn.close()
 
@@ -183,6 +234,8 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Branches WHERE name == ?", args)
     if data_type == "goal":
         cur.execute("DELETE FROM Goals WHERE ID == ?", args)
+    if data_type == "characteristic":
+        cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
     conn.commit()
     conn.close()
 
@@ -190,7 +243,7 @@ def deleteMainData(data_type, *args):
 def getGoalTree(goal_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    cur.execute(f"SELECT ID, name, progress, time FROM Goals WHERE ID LIKE '{goal_id}%' ORDER BY ID ASC")
+    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID LIKE '{goal_id}%' ORDER BY ID ASC")
     goal_tree = cur.fetchall()
     conn.close()
     return goal_tree

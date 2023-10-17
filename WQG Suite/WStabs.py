@@ -351,7 +351,7 @@ class GoalTab(QWidget):
                     isMain = True
                 else:
                     isMain = False
-                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], goal[2].split(":")[0], isMain)
+                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], goal[2].split(":")[0], isMain, goal[4])
                 goal_tree_item.subgoalAdded.connect(self.add_subgoal)
                 goal_tree_item.goalDeleted.connect(self.delete_goal)
 
@@ -431,6 +431,7 @@ class GoalTab(QWidget):
         self.dialog1.setWindowTitle("Characteristic settings")
         self.dialog1.setModal(True)
         self.charact_widgets = []
+        charact_name = ""
         charact_edit = QLineEdit()
         charact_edit.setPlaceholderText("Enter characteristic name")
 
@@ -442,7 +443,7 @@ class GoalTab(QWidget):
         self.charact_type_group = QButtonGroup()
         self.charact_type_group.addButton(static_rb)
         self.charact_type_group.addButton(dynamic_rb)
-        self.charact_type_group.buttonClicked.connect(self.update_widget)
+        self.charact_type_group.buttonToggled.connect(self.update_widget)
 
         value_type_label = QLabel("Choose value type:")
         quantitative_rb = QRadioButton("quantitative")
@@ -451,46 +452,78 @@ class GoalTab(QWidget):
         self.value_type_group = QButtonGroup()
         self.value_type_group.addButton(quantitative_rb)
         self.value_type_group.addButton(self.scale_rb)
-        self.value_type_group.buttonClicked.connect(self.update_widget)
+        self.value_type_group.buttonToggled.connect(self.update_widget)
 
-        self.v_box = QVBoxLayout()
-        self.v_box.addWidget(is_showing_checkbox)
-        self.v_box.addWidget(charact_edit)
-        self.v_box.addWidget(charact_type_label)
-        self.v_box.addWidget(static_rb)
-        self.v_box.addWidget(dynamic_rb)
-        self.v_box.addWidget(value_type_label)
-        self.v_box.addWidget(quantitative_rb)
-        self.v_box.addWidget(self.scale_rb)
-        self.v_box.addStretch()
+        self.scale_vals_edit = QLineEdit()
+        self.scale_vals_edit.setPlaceholderText("Enter scale values")
+        self.scale_vals_edit.setVisible(False)
+
+        v_box = QVBoxLayout()
+        v_box.addWidget(is_showing_checkbox)
+        v_box.addWidget(charact_edit)
+        v_box.addWidget(charact_type_label)
+        v_box.addWidget(static_rb)
+        v_box.addWidget(dynamic_rb)
+        v_box.addWidget(value_type_label)
+        v_box.addWidget(quantitative_rb)
+        v_box.addWidget(self.scale_rb)
+        v_box.addWidget(self.scale_vals_edit)
+        v_box.addStretch()
 
         if object_manager.isSelected:
             charact_name = line_edit.text()
             charact_edit.setText(charact_name)
-            charact_info = DataManager.loadMainData("characteristics", charact_name)
+            charact_info = DataManager.loadMainData("characteristic", charact_name)
+            if charact_info[0] == "static":
+                static_rb.setChecked(True)
+            else:
+                dynamic_rb.setChecked(True)
+            if charact_info[1] == "scale":
+                self.scale_rb.setChecked(True)
+            else:
+                quantitative_rb.setChecked(True)
+            if charact_info[2]:
+                self.scale_vals_edit.setText(charact_info[2])
+            if charact_info[3]:
+                is_showing_checkbox.setChecked(True)
 
             charact_edit.setReadOnly(True)
 
+        delete_button = QPushButton("Delete")
+        delete_button.clicked.connect(lambda: self.delete_charact(charact_name, object_manager))
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(lambda: self.save_charact(charact_edit, line_edit, is_showing_checkbox, object_manager))
-        ok_v_box = QVBoxLayout()
-        ok_v_box.addWidget(ok_button)
+        ok_h_box = QHBoxLayout()
+        ok_h_box.addWidget(delete_button)
+        ok_h_box.addWidget(ok_button)
         main_v_box = QVBoxLayout()
-        main_v_box.addLayout(self.v_box)
-        main_v_box.addLayout(ok_v_box)
+        main_v_box.addLayout(v_box)
+        main_v_box.addLayout(ok_h_box)
         self.dialog1.setLayout(main_v_box)
         self.dialog1.show()
 
+    def delete_charact(self, charact_name, obj_manager):
+        if charact_name:
+            DataManager.deleteMainData("characteristic", charact_name)
+            obj_manager.load_data()
+            obj_manager.update_list()
+            self.dialog1.close()
+
     def save_charact(self, charact_edit, line_edit, is_showing_cb, obj_manager):
         charact_name = charact_edit.text()
-        charact_type = self.charact_type_group.checkedButton().text()
-        value_type = self.value_type_group.checkedButton().text()
-        is_showing = is_showing_cb.isChecked()
-        if charact_name and charact_type and value_type:
-            if value_type == "quantitative":
-                value = self.min_val_edit.text() + " " + self.max_val_edit.text()
-            else:
+        charact_type = ""
+
+        if self.charact_type_group.checkedButton() and self.value_type_group.checkedButton():
+            charact_type = self.charact_type_group.checkedButton().text()
+            value_type = self.value_type_group.checkedButton().text()
+            is_showing = is_showing_cb.isChecked()
+
+            if value_type == "scale" and self.scale_vals_edit.text():
                 value = self.scale_vals_edit.text()
+            else:
+                value = ""
+
+        if charact_name and charact_type and value_type and (value or value_type != "scale"):
             if obj_manager.isSelected:
                 DataManager.updateMainData("Characteristics", [charact_type, value_type, value, is_showing, charact_name])
             else:
@@ -503,13 +536,9 @@ class GoalTab(QWidget):
             QMessageBox.warning(self.dialog1, "Failed to create a custom characteristic", "Not all the required information were entered")
 
     def update_widget(self, button):
-        if self.charact_widgets:
-            for wid in self.charact_widgets:
-                self.v_box.removeWidget(wid)
-                wid.deleteLater()
-
         if button.text() == "dynamic":
             self.value_type_group.setExclusive(False)
+            self.scale_rb.setChecked(False)
             self.scale_rb.setEnabled(False)
             self.value_type_group.setExclusive(True)
         elif button.text() == "static":
@@ -517,35 +546,31 @@ class GoalTab(QWidget):
             self.scale_rb.setEnabled(True)
             self.value_type_group.setExclusive(True)
 
-        if button.text() == "scale":
-            self.scale_vals_edit = QLineEdit()
-            self.scale_vals_edit.setPlaceholderText("Set scale values")
-            self.charact_widgets = [self.scale_vals_edit]
-            self.v_box.addWidget(self.scale_vals_edit)
-        elif button.text() == "quantitative":
-            self.max_val_edit = QLineEdit()
-            self.max_val_edit.setPlaceholderText("Set max value")
-            self.min_val_edit = QLineEdit()
-            self.min_val_edit.setPlaceholderText("Set min value")
-            self.charact_widgets = [self.max_val_edit, self.min_val_edit]
-            self.v_box.addWidget(self.max_val_edit)
-            self.v_box.addWidget(self.min_val_edit)
+        if self.value_type_group.checkedButton() and self.value_type_group.checkedButton().text() == "scale":
+            self.scale_vals_edit.setVisible(True)
+        else:
+            self.scale_vals_edit.setVisible(False)
 
-    def add_skill_or_charact(self, standard_mode=[], setting_mode=[]):#Standard mode: [data_type, line_edit, list_widget, object_manager]
+    def add_skill_or_charact(self, standard_mode=[], setting_mode=[]):
         if setting_mode:
-            object_name, object_value, list_widget, isGroup = setting_mode
+            object_name, object_value, list_widget, isGroup, data_type = setting_mode
         else:
             object_value = ""
             isGroup = self.goals_dict[self.current_goal_id].goal_data[13]
             data_type, line_edit, list_widget, object_manager = standard_mode
             object_name = line_edit.text()
         if setting_mode or object_manager.isSelected and object_name not in list_widget.addedItemsText:
-            widget = ws.SkillCharactWidget(object_name, object_value)
+            widget = ws.SkillCharactWidget(object_name, object_value, data_type)
             widget.value_edit.textEdited.connect(lambda: self.skill_or_charact_changed(widget.value_edit, list_widget, object_name))
             widget.delete_button.clicked.connect(lambda: self.remove_skill_or_charact(item, object_name, list_widget))
             if standard_mode:
                 self.setSaveEnabled()
-            if isGroup:
+            
+            if isGroup and data_type == "Characteristics":
+                c_type = DataManager.loadMainData("characteristic", object_name)[0]
+                if c_type == "dynamic":
+                    widget.setReadOnly()
+            elif isGroup and data_type == "Skills":
                 widget.setReadOnly()
 
             item = QListWidgetItem()
@@ -677,6 +702,8 @@ class GoalTab(QWidget):
         if not self.id_list:
             self.goal_tree_list_widget.currentItemChanged.disconnect()
             self.previous_window_req.emit()
+        if len(self.current_goal_id.split(".")) > 2 and not self.goals_dict[self.current_goal_id].goal_data[13]:
+            self.recalculateValues()
         self.goals_dict.pop(goal_id)
         self.goal_tree_list_widget.takeItem(self.goal_tree_list_widget.currentRow())
 
@@ -729,7 +756,7 @@ class GoalTab(QWidget):
             used_skills += f"{skill}:{skill_value},"
             skill_values.append(skill_value)
 
-        skill_values = [int(item) for item in skill_values if item != ""]
+        skill_values = [float(item) for item in skill_values if item != ""]
         if len(skill_values) > 1 and sum(skill_values) == float(characts[0]):
             skills_valid = True
         elif len(skill_values) == 1 and sum(skill_values) <= float(characts[0]):
@@ -741,6 +768,7 @@ class GoalTab(QWidget):
 
         cc_list_widget = self.list_widget_list[1]
         full_cc_values = True
+
         for cc in cc_list_widget.addedItemsText.keys():
             c_value = cc_list_widget.addedItemsText[cc]
             if not c_value:
@@ -757,11 +785,13 @@ class GoalTab(QWidget):
         goal_progress = self.goals_dict[self.current_goal_id].goal_data[10]
         if not goal_progress:
             goal_progress = "0:Hours"
+        elif goal_progress.split(":")[1] != "Hours" and goal_progress.split(":")[1] not in cc_list_widget.addedItemsText.keys():
+            goal_progress = goal_progress.split(":")[0] + ":Hours"
 
         if (goal_name and len(characts) == 4 and used_skills and full_cc_values and skills_valid) or (is_group and goal_name and len(characts) > 2):
             if self.goals_dict[self.current_goal_id].isGoalExists:
                 if is_group:
-                    if len(characts) < 4:
+                    if len(characts) < 4:#Валидность определяется по длине списка, поэтому вставить значение 0 изначально нельзя
                         characts.insert(0, 0)
                     goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, self.goals_dict[self.current_goal_id].goal_data[7], note, image_list, goal_progress, custom_characts, cc_stats, is_group, is_showing_in_list, self.old_goal_id)
                 else:
@@ -771,11 +801,14 @@ class GoalTab(QWidget):
                     current_widget = self.goal_tree_list_widget.itemWidget(previous)
                 else:
                     current_widget = self.goal_tree_list_widget.itemWidget(self.goal_tree_list_widget.currentItem())
-                current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[2]), goal_data[10].split(":")[0])
+                current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[2]), goal_data[10].split(":")[0], is_group)
             else:
                 if is_group:
                     if len(characts) < 4:
                         characts.insert(0, 0)
+                    else:
+                        characts[0] = 0
+                    used_skills = ""
                     goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, "creating", note, image_list, goal_progress, custom_characts, cc_stats, is_group, is_showing_in_list)
                 else:
                     goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, "created", note, image_list, goal_progress, custom_characts, cc_stats, is_group, is_showing_in_list)
@@ -787,7 +820,7 @@ class GoalTab(QWidget):
                     isMain = True
                 else:
                     isMain = False
-                goal_tree_item = ws.GoalTreeItem(self.current_goal_id, goal_name, float(goal_data[2]), 0, isMain)
+                goal_tree_item = ws.GoalTreeItem(self.current_goal_id, goal_name, float(goal_data[2]), 0, isMain, is_group)
                 goal_tree_item.subgoalAdded.connect(self.add_subgoal)
                 goal_tree_item.goalDeleted.connect(self.delete_goal)
 
@@ -804,37 +837,19 @@ class GoalTab(QWidget):
             self.areChangesMade = False
             self.changesSaved.emit()
             self.goals_dict[self.current_goal_id].setData(list(goal_data[:15]))
-            if len(self.current_goal_id.split(".")) > 2:
-                super_goal = ".".join(self.current_goal_id.split(".")[:-1])
-                if DataManager.loadMainData("check supergoal", super_goal):
-                    self.recalculateValues()
+            if len(self.current_goal_id.split(".")) > 2 and not is_group:
+                self.recalculateValues()
         else:
             QMessageBox.warning(self, "Fill cells to save the goal", "Not all the required cells were filled or some data were entered incorrectly")
 
     def recalculateValues(self):
-        time_charact = self.goals_dict[self.current_goal_id].goal_data[2]
-        layers = self.current_goal_id.split(".")[:-1]
-        dynamic_characts = {}
-        update_custom = True #Whether it is necessary to try to update a custom charact of a supergoal
-        ccs = self.goals_dict[self.current_goal_id].goal_data[11].split(",")
-        if ccs != [""]:
-            for cc in ccs:
-                cc = cc.split(":")
-                dynamic_characts[cc[0]] = cc[1]
+        layers = self.current_goal_id.split(".")
 
-        used_skills = self.goals_dict[self.current_goal_id].goal_data[6]
-        if used_skills:
-            used_skills = used_skills.split(",")
-
-        while len(layers) > 1:
-            layer = ".".join(layers)
-            if DataManager.loadMainData("check supergoal", layer):
-                if update_custom and dynamic_characts:
-                    update_custom = DataManager.recalculateValues(layer, time_charact, used_skills, dynamic_characts)
-                else:
-                    DataManager.recalculateValues(layer, time_charact, used_skills)
-                    if layer in self.goals_dict:
-                        self.goals_dict[layer].loadData()
+        while len(layers) > 2:
+            DataManager.recalculateValues(layers)
+            supergoal_id = ".".join(layers[:-1])
+            if supergoal_id in self.goals_dict:
+                self.goals_dict[supergoal_id].loadData()
             layers.pop(-1)
 
     def getGoalID(self, parent_id):

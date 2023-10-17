@@ -38,7 +38,8 @@ class Goal(QObject):
         self.cell_list[0].setImage(images_list[0])
         self.cell_list[2].setImagesList(images_list)
         self.cell_list[6].blockSignals(True)
-        self.cell_list[6].setChecked(bool(self.goal_data[13]))
+        self.cell_list[6].setChecked(isGroup)
+        self.cell_list[6].setDisabled(isGroup)
         self.cell_list[6].blockSignals(False)
 
         self.cell_list[1].setText(self.goal_data[1])
@@ -51,11 +52,11 @@ class Goal(QObject):
         #ќтобразим значени€ стандартных характеристик
         characts_edits = self.cell_list[7:11]
         standard_characts_values = self.goal_data[2:6]
+        if isGroup:
+            characts_edits[0].setReadOnly(True)
+        else:
+            characts_edits[0].setReadOnly(False)
         for i in range(4):
-            if i == 0 and isGroup:
-                characts_edits[i].setReadOnly(True)
-            elif i == 0:
-                characts_edits[i].setReadOnly(False)
             characts_edits[i].setText(str(standard_characts_values[i]))
 
         #ќтобразим значени€ пользовательских и навыки
@@ -63,7 +64,8 @@ class Goal(QObject):
         skills_list_widget = self.list_widget_list[2]
 
         for i in range(4, characts_list_widget.count()):
-            characts_list_widget.takeItem(i)
+            characts_list_widget.takeItem(4)
+
         skills_list_widget.clear()
         characts_list_widget.addedItemsText = {}
         skills_list_widget.addedItemsText = {}
@@ -75,12 +77,12 @@ class Goal(QObject):
             custom_characts = custom_characts.split(",")
             for obj in custom_characts:
                 obj = obj.split(":")#[charact_name, value]
-                self.add_skill_or_charact(setting_mode=obj + [characts_list_widget, isGroup])
+                self.add_skill_or_charact(setting_mode=obj + [characts_list_widget, isGroup, "Characteristics"])
         if used_skills:
             used_skills = used_skills.split(",")
             for obj in used_skills:
                 obj = obj.split(":")#[skill_name, value]
-                self.add_skill_or_charact(setting_mode=obj + [skills_list_widget, isGroup])
+                self.add_skill_or_charact(setting_mode=obj + [skills_list_widget, isGroup, "Skills"])
 
     def setData(self, goal_data):
         self.goal_data = goal_data
