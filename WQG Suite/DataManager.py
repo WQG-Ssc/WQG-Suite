@@ -30,7 +30,7 @@ def loadMainData(data_type, *args):
         return list(goal_data)
 
     if data_type == "branch":
-        cur.execute("SELECT name FROM Branches WHERE RowID == ?", args)
+        cur.execute("SELECT name, custom_characteristics, sections_position FROM Branches WHERE RowID == ?", args)
         branch_name = cur.fetchone()
         conn.close()
         return branch_name
@@ -57,7 +57,7 @@ def loadMainData(data_type, *args):
         return cc_stats
 
     if data_type == "characteristic":
-        cur.execute("SELECT c_type, v_type, c_values, showing_in_gl FROM Characteristics WHERE name == ?", args)
+        cur.execute("SELECT c_type, v_type FROM Characteristics WHERE name == ?", args)
         charact = cur.fetchone()
         conn.close()
         return charact
@@ -83,7 +83,7 @@ def saveMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
-        cur.execute("INSERT INTO Branches (name) VALUES (?)", (args,))
+        cur.execute("INSERT INTO Branches (name, sections_position) VALUES (?, ?)", args)
 
     if data_type == "goal":
         cur.execute("INSERT INTO Goals (ID, name, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics, cc_stats, is_group, showing_in_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
@@ -93,7 +93,7 @@ def saveMainData(data_type, args):
         cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{args}' REAL")
 
     if data_type == "Characteristics":
-        cur.execute("INSERT INTO Characteristics (name, c_type, v_type, c_values, showing_in_gl) VALUES (?, ?, ?, ?, ?)", args)
+        cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
         
     conn.commit()
     conn.close()
@@ -216,13 +216,15 @@ def updateMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
-        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", (args,))
+        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
+    if data_type == "displaying_characts":
+        cur.execute("UPDATE Branches SET custom_characteristics = ?, sections_position = ? WHERE RowID == ?", args)
+    if data_type == "sections_pos":
+        cur.execute("UPDATE Branches SET sections_position = ? WHERE RowID == ?", args)
     if data_type == "goal":
         cur.execute("UPDATE Goals SET ID = ?, name = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ?, cc_stats = ?, is_group = ?, showing_in_list = ? WHERE ID == ?", args)
-    if data_type == "skill":
-        cur.execute("UPDATE Skills SET name = ? WHERE name = ?", (args,))
     if data_type == "Characteristics":
-        cur.execute("UPDATE Characteristics SET c_type = ?, v_type = ?, c_values = ?, showing_in_gl = ? WHERE name == ?", args)
+        cur.execute("UPDATE Characteristics SET name = ?, c_type = ?, v_type = ? WHERE name == ?", args)
     conn.commit()
     conn.close()
 

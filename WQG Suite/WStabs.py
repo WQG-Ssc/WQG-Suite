@@ -106,7 +106,7 @@ class BranchesTab(QWidget):
     def add_branch(self):
         branch_name, _ = QInputDialog.getText(self, "Branch adding", "Enter new branch name:")
         if branch_name:
-            if DataManager.saveMainData("branch", branch_name) != False:
+            if DataManager.saveMainData("branch", [branch_name, ",".join(["", "Name", "Hours", "Benefit", "limit date", "Priority", "State", "ID"])]) != False:
                 self.branch_list.append(branch_name)
 
                 goal_branch = ws.GoalBranch(branch_name)
@@ -136,16 +136,15 @@ class BranchesTab(QWidget):
             self.branch_list_widget.takeItem(branch_index)
 
 class GoalsTab(QWidget):
+    sectionMoved = pyqtSignal()
     def __init__(self, branch):
         super().__init__()
         self.current_branch_id = branch
 
+        self.standard_characts = ["", "Name", "Hours", "Benefit", "limit date", "Priority", "State", "ID"]
         self.tree_widget = QTreeWidget()
         self.tree_widget.setColumnWidth(0, 135)
         self.tree_widget.setIconSize(QSize(97, 97))
-        self.tree_widget.setColumnCount(9)
-        headers = ["", "Name", "Hours", "Benefit", "limit date", "Priority", "State", "ID"]
-        self.tree_widget.setHeaderLabels(headers)
         self.tree_widget.setSortingEnabled(True)
 
         self.updateWidget()
@@ -153,31 +152,132 @@ class GoalsTab(QWidget):
         h_box = QHBoxLayout()
         h_box.setContentsMargins(300, 85, 250, 85)
         h_box.addWidget(self.tree_widget)
+
+        settings_button = QPushButton()
+        settings_button.clicked.connect(self.characts_displaying_settings)
         
         self.add_button = QPushButton()
         self.add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
         self.add_button.setFixedSize(50, 50)
         self.add_button.setObjectName("Menu")
-        h_box.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        
+        v_box = QVBoxLayout()
+        v_box.setContentsMargins(0, 0, 0, 0)
+
+        v_box.addStretch()
+        v_box.addWidget(settings_button)
+        v_box.addWidget(self.add_button)
+        h_box.addLayout(v_box)
 
         self.setLayout(h_box)
 
+    def characts_displaying_settings(self):
+        self.dialog = QDialog()
+        self.dialog.setModal(True)
+        self.dialog.setFixedSize(280, 280)
+        self.displaying_characts = []
+        self.save_sections_act = QAction()
+        self.addAction(self.save_sections_act)
+
+        label = QLabel("Displaying custom characteristic")
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText("Enter a custom characteristic name")
+        self.characts_list_widget = QListWidget()
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.save_displaying_characts)
+
+        for charact in self.ccs:
+            self.add_displaying_charact(charact)
+
+        v_box = QVBoxLayout()
+        v_box.addWidget(label)
+        v_box.addWidget(line_edit)
+        v_box.addWidget(self.characts_list_widget)
+        v_box.addWidget(ok_button)
+        self.dialog.setLayout(v_box)
+        
+        object_manager = ws.ObjectManager(self.dialog, line_edit, ["Characteristics"])
+        object_manager.selected.connect(self.add_displaying_charact)
+        self.dialog.show()
+
+    def save_displaying_characts(self):
+        for charact in self.ccs:
+            if charact not in self.displaying_characts:
+                self.headers.remove(charact)
+        for charact in self.displaying_characts:
+            if charact not in self.headers:
+                self.headers.append(charact)
+
+        sections_pos = ",".join(self.headers)
+        ccs = ",".join(self.displaying_characts)
+        DataManager.updateMainData("displaying_characts", (ccs, sections_pos, self.current_branch_id))
+        self.dialog.close()
+        self.header.sectionMoved.disconnect()
+        self.updateWidget()
+
+    def add_displaying_charact(self, charact_name):
+        if charact_name not in self.displaying_characts:
+            widget = ws.SkillCharactWidget(charact_name, "", "displaying charact")
+            item = QListWidgetItem()
+            item.setSizeHint(widget.sizeHint())
+            self.characts_list_widget.addItem(item)
+            self.characts_list_widget.setItemWidget(item, widget)
+            widget.delete_button.clicked.connect(lambda: self.remove_charact(item))
+            self.displaying_characts.append(charact_name)
+
+    def remove_charact(self, item):
+        name = self.characts_list_widget.itemWidget(item).name
+        self.displaying_characts.remove(name)
+        self.characts_list_widget.takeItem(self.characts_list_widget.row(item))
+
     def updateWidget(self):
+        branch = DataManager.loadMainData("branch", self.current_branch_id)
+        if branch[1]:
+            self.ccs = branch[1].split(",")
+        else:
+            self.ccs = []
+        self.headers = branch[2].split(',')
+        self.tree_widget.setColumnCount(len(self.headers))
+        self.tree_widget.setHeaderLabels(self.headers)
+        self.header = self.tree_widget.header()
+        self.header.sectionMoved.connect(self.section_moved)
+
         self.tree_widget.clear()
         goals = DataManager.loadMainData("goals", self.current_branch_id)
-        for i in range(len(goals)):
-            goal_info = goals[i]
+        for goal_info in goals:
+            goal_info_dict = {}
             if goal_info[10]:
-                goal_info_str = [str(item) for item in goal_info[:10]]#Преобразуем все значения в строковой тип
+                for i in range(len(goal_info[:7])):
+                    goal_info_dict[self.standard_characts[i + 1]] = str(goal_info[i])
 
-                goal_item = QTreeWidgetItem(self.tree_widget, [""] + goal_info_str[:7])
+                if self.ccs and goal_info[9]:
+                    for charact in goal_info[9].split(","):#Now there's all characts of the goal in goal_info_dict
+                        charact_name, value = charact.split(":")
+                        goal_info_dict[charact_name] = value
+
+                print(goal_info_dict)
+                goal_info_list = []
+                for charact in self.headers[1:]:
+                    goal_info_list.append(goal_info_dict.pop(charact, ""))
+                print(goal_info_list)
+
+                goal_item = QTreeWidgetItem(self.tree_widget, [""] + goal_info_list)
                 goal_item.setSizeHint(1, QSize(100, 120))
                 goal_item.setFont(1, QFont("Calibri", 18, 700))
-                for i in range(2, 9):#Потом последние значение будет получатся по кол-ву характеристик
+                for i in range(2, 8 + len(self.ccs)):#Потом последние значение будет получатся по кол-ву характеристик
                     goal_item.setFont(i, QFont("Calibri", 18))
                 goal_item.setIcon(0, QIcon(ws.getGoalImage(goal_info[7].split(",")[0], goal_info[8].split(":")[0], goal_info[1]))) #Так мы получаем первое изображение из списка путей, которое является главным
                 self.tree_widget.addTopLevelItem(goal_item)
         self.tree_widget.resizeColumnToContents(5)
+
+    def section_moved(self, logicI, old_index, new_index):
+        print(1)
+        section = self.headers.pop(old_index)
+        self.headers.insert(new_index, section)
+        self.sectionMoved.emit()
+
+    def saveData(self):
+        DataManager.updateMainData("sections_pos", [",".join(self.headers), self.current_branch_id])
 
 class GoalTab(QWidget):
     changesMade = pyqtSignal()
@@ -187,7 +287,8 @@ class GoalTab(QWidget):
     def __init__(self, branch_id, item=None):
         super().__init__()
         self.branch_id = str(branch_id)
-        self.branch_name = DataManager.loadMainData("branch", branch_id)[0]
+        self.branch_name, _, sections_pos = DataManager.loadMainData("branch", branch_id)
+        sections_pos = sections_pos.split(",")
         self.item = item
 
         goal_characts = ["Time:", "Benefit:", "Limit date:", "Priority:"]
@@ -341,8 +442,8 @@ class GoalTab(QWidget):
 
         self.id_list = []
         if self.item:
-            goal_id = self.item.text(7)
-            goal_name = self.item.text(1)
+            goal_id = self.item.text(sections_pos.index("ID"))
+            goal_name = self.item.text(sections_pos.index("Name"))
             #Отобразим дерево цели
             goal_tree = DataManager.getGoalTree(goal_id)
             for goal in goal_tree:
@@ -430,12 +531,10 @@ class GoalTab(QWidget):
         self.dialog1 = QDialog()
         self.dialog1.setWindowTitle("Characteristic settings")
         self.dialog1.setModal(True)
-        self.charact_widgets = []
         charact_name = ""
         charact_edit = QLineEdit()
         charact_edit.setPlaceholderText("Enter characteristic name")
 
-        is_showing_checkbox = QCheckBox("Showing in goal list")
         charact_type_label = QLabel("Choose characteristic type:")
         
         static_rb = QRadioButton("static")
@@ -447,52 +546,40 @@ class GoalTab(QWidget):
 
         value_type_label = QLabel("Choose value type:")
         quantitative_rb = QRadioButton("quantitative")
-        self.scale_rb = QRadioButton("scale")
+        self.category_rb = QRadioButton("category")
 
         self.value_type_group = QButtonGroup()
         self.value_type_group.addButton(quantitative_rb)
-        self.value_type_group.addButton(self.scale_rb)
-        self.value_type_group.buttonToggled.connect(self.update_widget)
-
-        self.scale_vals_edit = QLineEdit()
-        self.scale_vals_edit.setPlaceholderText("Enter scale values")
-        self.scale_vals_edit.setVisible(False)
+        self.value_type_group.addButton(self.category_rb)
 
         v_box = QVBoxLayout()
-        v_box.addWidget(is_showing_checkbox)
         v_box.addWidget(charact_edit)
         v_box.addWidget(charact_type_label)
         v_box.addWidget(static_rb)
         v_box.addWidget(dynamic_rb)
         v_box.addWidget(value_type_label)
         v_box.addWidget(quantitative_rb)
-        v_box.addWidget(self.scale_rb)
-        v_box.addWidget(self.scale_vals_edit)
+        v_box.addWidget(self.category_rb)
         v_box.addStretch()
 
         if object_manager.isSelected:
             charact_name = line_edit.text()
             charact_edit.setText(charact_name)
             charact_info = DataManager.loadMainData("characteristic", charact_name)
+            if charact_info[1] == "category":
+                self.category_rb.setChecked(True)
+            else:
+                quantitative_rb.setChecked(True)
+
             if charact_info[0] == "static":
                 static_rb.setChecked(True)
             else:
                 dynamic_rb.setChecked(True)
-            if charact_info[1] == "scale":
-                self.scale_rb.setChecked(True)
-            else:
-                quantitative_rb.setChecked(True)
-            if charact_info[2]:
-                self.scale_vals_edit.setText(charact_info[2])
-            if charact_info[3]:
-                is_showing_checkbox.setChecked(True)
-
-            charact_edit.setReadOnly(True)
 
         delete_button = QPushButton("Delete")
         delete_button.clicked.connect(lambda: self.delete_charact(charact_name, object_manager))
         ok_button = QPushButton("OK")
-        ok_button.clicked.connect(lambda: self.save_charact(charact_edit, line_edit, is_showing_checkbox, object_manager))
+        ok_button.clicked.connect(lambda: self.save_charact(charact_edit, line_edit, object_manager))
         ok_h_box = QHBoxLayout()
         ok_h_box.addWidget(delete_button)
         ok_h_box.addWidget(ok_button)
@@ -509,25 +596,20 @@ class GoalTab(QWidget):
             obj_manager.update_list()
             self.dialog1.close()
 
-    def save_charact(self, charact_edit, line_edit, is_showing_cb, obj_manager):
+    def save_charact(self, charact_edit, line_edit, obj_manager):
         charact_name = charact_edit.text()
+        old_charact_name = line_edit.text()
         charact_type = ""
 
         if self.charact_type_group.checkedButton() and self.value_type_group.checkedButton():
             charact_type = self.charact_type_group.checkedButton().text()
             value_type = self.value_type_group.checkedButton().text()
-            is_showing = is_showing_cb.isChecked()
 
-            if value_type == "scale" and self.scale_vals_edit.text():
-                value = self.scale_vals_edit.text()
-            else:
-                value = ""
-
-        if charact_name and charact_type and value_type and (value or value_type != "scale"):
+        if charact_name and charact_type and value_type:
             if obj_manager.isSelected:
-                DataManager.updateMainData("Characteristics", [charact_type, value_type, value, is_showing, charact_name])
+                DataManager.updateMainData("Characteristics", [charact_name, charact_type, value_type, old_charact_name])
             else:
-                DataManager.saveMainData("Characteristics", [charact_name, charact_type, value_type, value, is_showing])
+                DataManager.saveMainData("Characteristics", [charact_name, charact_type, value_type])
                 obj_manager.isSelected = True
             self.dialog1.close()
             obj_manager.load_data()
@@ -538,18 +620,13 @@ class GoalTab(QWidget):
     def update_widget(self, button):
         if button.text() == "dynamic":
             self.value_type_group.setExclusive(False)
-            self.scale_rb.setChecked(False)
-            self.scale_rb.setEnabled(False)
+            self.category_rb.setChecked(False)
+            self.category_rb.setEnabled(False)
             self.value_type_group.setExclusive(True)
         elif button.text() == "static":
             self.value_type_group.setExclusive(False)
-            self.scale_rb.setEnabled(True)
+            self.category_rb.setEnabled(True)
             self.value_type_group.setExclusive(True)
-
-        if self.value_type_group.checkedButton() and self.value_type_group.checkedButton().text() == "scale":
-            self.scale_vals_edit.setVisible(True)
-        else:
-            self.scale_vals_edit.setVisible(False)
 
     def add_skill_or_charact(self, standard_mode=[], setting_mode=[]):
         if setting_mode:

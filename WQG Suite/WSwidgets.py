@@ -841,16 +841,17 @@ class SkillCharactWidget(QWidget):
     def __init__(self, text, value, data_type):
         super().__init__()
         label = QLabel(text)
+        self.name = text
         self.data_type = data_type
         self.delete_button = QPushButton()
         self.delete_button.setIcon(QIcon(r"Files\icons\remove.png"))
         self.delete_button.setObjectName("Tool")
         self.delete_button.setFixedSize(20, 20)
         h_box = QHBoxLayout()
-        self.value_edit = QLineEdit(value)
-
         h_box.addWidget(label)
-        h_box.addWidget(self.value_edit)
+        if data_type != "displaying charact":
+            self.value_edit = QLineEdit(value)
+            h_box.addWidget(self.value_edit)
 
         h_box.addWidget(self.delete_button)
         self.setLayout(h_box)
