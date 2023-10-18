@@ -255,11 +255,9 @@ class GoalsTab(QWidget):
                         charact_name, value = charact.split(":")
                         goal_info_dict[charact_name] = value
 
-                print(goal_info_dict)
                 goal_info_list = []
                 for charact in self.headers[1:]:
                     goal_info_list.append(goal_info_dict.pop(charact, ""))
-                print(goal_info_list)
 
                 goal_item = QTreeWidgetItem(self.tree_widget, [""] + goal_info_list)
                 goal_item.setSizeHint(1, QSize(100, 120))
@@ -271,7 +269,6 @@ class GoalsTab(QWidget):
         self.tree_widget.resizeColumnToContents(5)
 
     def section_moved(self, logicI, old_index, new_index):
-        print(1)
         section = self.headers.pop(old_index)
         self.headers.insert(new_index, section)
         self.sectionMoved.emit()
