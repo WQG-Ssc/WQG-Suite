@@ -237,11 +237,9 @@ def deleteMainData(data_type, *args):
         cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
     if data_type == "goal":
         if args[1]:
-            print("v1")
             cur.execute(f"DELETE FROM Goals WHERE ID == '{args[0]}'")
             cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
         else:
-            print('v2')
             cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
     if data_type == "characteristic":
         cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
