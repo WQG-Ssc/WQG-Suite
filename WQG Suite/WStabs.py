@@ -130,8 +130,8 @@ class BranchesTab(QWidget):
     def delete_branch(self, branch_name):
         ok = QMessageBox.question(self, "Branch deleting", "Delete branch?")
         if ok == QMessageBox.StandardButton.Yes:
-            DataManager.deleteMainData("branch", branch_name)
             branch_index = self.branch_list.index(branch_name)
+            DataManager.deleteMainData("branch", branch_index + 1)
             self.branch_list.pop(branch_index)
             self.branch_list_widget.takeItem(branch_index)
 
@@ -140,6 +140,7 @@ class GoalsTab(QWidget):
     def __init__(self, branch):
         super().__init__()
         self.current_branch_id = branch
+        self.isSubgoalsShowing = False
 
         self.standard_characts = ["", "Name", "Hours", "Benefit", "limit date", "Priority", "State", "ID"]
         self.tree_widget = QTreeWidget()
@@ -153,7 +154,13 @@ class GoalsTab(QWidget):
         h_box.setContentsMargins(300, 85, 250, 85)
         h_box.addWidget(self.tree_widget)
 
+        showing_checkbox = QCheckBox()
+        showing_checkbox.toggled.connect(self.toggle_subgoals_showing)
+        showing_checkbox.setToolTip("Show subgoals")
+
         settings_button = QPushButton()
+        settings_button.setIcon(QIcon(i_dir + r"\Settings.png"))
+        settings_button.setObjectName("Menu")
         settings_button.clicked.connect(self.characts_displaying_settings)
         
         self.add_button = QPushButton()
@@ -165,6 +172,7 @@ class GoalsTab(QWidget):
         v_box.setContentsMargins(0, 0, 0, 0)
 
         v_box.addStretch()
+        v_box.addWidget(showing_checkbox, alignment=Qt.AlignmentFlag.AlignHCenter)
         v_box.addWidget(settings_button)
         v_box.addWidget(self.add_button)
         h_box.addLayout(v_box)
@@ -174,7 +182,7 @@ class GoalsTab(QWidget):
     def characts_displaying_settings(self):
         self.dialog = QDialog()
         self.dialog.setModal(True)
-        self.dialog.setFixedSize(280, 280)
+        self.dialog.setFixedWidth(280)
         self.displaying_characts = []
         self.save_sections_act = QAction()
         self.addAction(self.save_sections_act)
@@ -183,6 +191,8 @@ class GoalsTab(QWidget):
         line_edit = QLineEdit()
         line_edit.setPlaceholderText("Enter a custom characteristic name")
         self.characts_list_widget = QListWidget()
+        reset_button = QPushButton("Reset sections position")
+        reset_button.clicked.connect(self.reset_sections)
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.save_displaying_characts)
 
@@ -193,12 +203,26 @@ class GoalsTab(QWidget):
         v_box.addWidget(label)
         v_box.addWidget(line_edit)
         v_box.addWidget(self.characts_list_widget)
+        v_box.addWidget(reset_button)
         v_box.addWidget(ok_button)
         self.dialog.setLayout(v_box)
         
         object_manager = ws.ObjectManager(self.dialog, line_edit, ["Characteristics"])
         object_manager.selected.connect(self.add_displaying_charact)
         self.dialog.show()
+
+    def reset_sections(self):
+        self.headers = self.standard_characts + self.ccs
+        self.header.sectionMoved.disconnect()
+        self.saveData()
+        self.updateWidget()
+
+    def toggle_subgoals_showing(self, state):
+        if state:
+            self.isSubgoalsShowing = True
+        else:
+            self.isSubgoalsShowing = False
+        self.updateWidget()
 
     def save_displaying_characts(self):
         for charact in self.ccs:
@@ -246,7 +270,7 @@ class GoalsTab(QWidget):
         goals = DataManager.loadMainData("goals", self.current_branch_id)
         for goal_info in goals:
             goal_info_dict = {}
-            if goal_info[10]:
+            if goal_info[10] or self.isSubgoalsShowing:
                 for i in range(len(goal_info[:7])):
                     goal_info_dict[self.standard_characts[i + 1]] = str(goal_info[i])
 
@@ -285,7 +309,7 @@ class GoalTab(QWidget):
         super().__init__()
         self.branch_id = str(branch_id)
         self.branch_name, _, sections_pos = DataManager.loadMainData("branch", branch_id)
-        sections_pos = sections_pos.split(",")
+        self.sections_pos = sections_pos.split(",")
         self.item = item
 
         goal_characts = ["Time:", "Benefit:", "Limit date:", "Priority:"]
@@ -439,25 +463,7 @@ class GoalTab(QWidget):
 
         self.id_list = []
         if self.item:
-            goal_id = self.item.text(sections_pos.index("ID"))
-            goal_name = self.item.text(sections_pos.index("Name"))
-            #Отобразим дерево цели
-            goal_tree = DataManager.getGoalTree(goal_id)
-            for goal in goal_tree:
-                self.id_list.append(goal[0])
-                if goal[1] == goal_name:
-                    isMain = True
-                else:
-                    isMain = False
-                goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], goal[2].split(":")[0], isMain, goal[4])
-                goal_tree_item.subgoalAdded.connect(self.add_subgoal)
-                goal_tree_item.goalDeleted.connect(self.delete_goal)
-
-                list_widget_item = QListWidgetItem()
-                size_hint = goal_tree_item.sizeHint()
-                list_widget_item.setSizeHint(QSize(size_hint.width(), size_hint.height() + 35))
-                self.goal_tree_list_widget.addItem(list_widget_item)
-                self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
+            self.update_goal_tree()
         else:
             self.add_subgoal(self.branch_id)
             self.old_goal_id = self.current_goal_id
@@ -491,6 +497,29 @@ class GoalTab(QWidget):
         main_grid.setColumnStretch(2, 1)
 
         self.setLayout(main_grid)
+
+    def update_goal_tree(self):
+        self.goal_tree_list_widget.clear()
+        self.id_list = []
+        goal_id = self.item.text(self.sections_pos.index("ID"))
+        goal_name = self.item.text(self.sections_pos.index("Name"))
+        #Отобразим дерево цели
+        goal_tree = DataManager.getGoalTree(goal_id)
+        for goal in goal_tree:
+            self.id_list.append(goal[0])
+            if goal[1] == goal_name:
+                isMain = True
+            else:
+                isMain = False
+            goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], goal[2].split(":")[0], isMain, goal[4])
+            goal_tree_item.subgoalAdded.connect(self.add_subgoal)
+            goal_tree_item.goalDeleted.connect(self.delete_goal)
+
+            list_widget_item = QListWidgetItem()
+            size_hint = goal_tree_item.sizeHint()
+            list_widget_item.setSizeHint(QSize(size_hint.width(), size_hint.height() + 35))
+            self.goal_tree_list_widget.addItem(list_widget_item)
+            self.goal_tree_list_widget.setItemWidget(list_widget_item, goal_tree_item)
 
     def add_skill_or_charact_dialog(self, data_type, list_widget):
         if data_type == "Skills" and self.goals_dict[self.current_goal_id].goal_data[13]:
@@ -676,12 +705,6 @@ class GoalTab(QWidget):
         id_label = QLabel("Set goal id:")
         id_edit = QLineEdit(self.current_goal_id)
         progress_calc_label = QLabel("How to calculate goal progress:")
-        showing_checkbox = QCheckBox("Showing in goal list")
-
-        self.old_checkbox_state = (self.goals_dict[self.current_goal_id].goal_data[14])
-        if self.old_checkbox_state == "":
-            self.old_checkbox_state = True
-        showing_checkbox.setChecked(self.old_checkbox_state)
 
         cc = self.goals_dict[self.current_goal_id].goal_data[11]
         progress_calc_mode = "Hours"
@@ -708,7 +731,7 @@ class GoalTab(QWidget):
         calc_combo.setCurrentText(progress_calc_mode)
 
         ok_button = QPushButton("Ok")
-        ok_button.clicked.connect(lambda: self.save_goal_settings(id_edit, calc_combo, showing_checkbox))
+        ok_button.clicked.connect(lambda: self.save_goal_settings(id_edit, calc_combo))
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(lambda: self.dialog.close())
 
@@ -717,17 +740,15 @@ class GoalTab(QWidget):
         grid.addWidget(id_edit, 0, 1)
         grid.addWidget(progress_calc_label, 1, 0)
         grid.addWidget(calc_combo, 1, 1)
-        grid.addWidget(showing_checkbox, 2, 0)
-        grid.addWidget(ok_button, 3, 0)
-        grid.addWidget(cancel_button, 3, 1)
+        grid.addWidget(ok_button, 2, 0)
+        grid.addWidget(cancel_button, 2, 1)
         self.dialog.setLayout(grid)
         self.dialog.show()
 
-    def save_goal_settings(self, id_edit, calc_combo, checkbox):
+    def save_goal_settings(self, id_edit, calc_combo):
         self.old_goal_id = self.current_goal_id
         new_id = id_edit.text()
         calc_mode = calc_combo.currentText()
-        new_state = checkbox.isChecked()
         if calc_mode != self.old_progress_calc_mode:
             self.goals_dict[self.current_goal_id].goal_data[10] = self.goals_dict[self.current_goal_id].goal_data[10].split(":")[0] + ":" + calc_mode
             self.setSaveEnabled()
@@ -737,9 +758,6 @@ class GoalTab(QWidget):
             self.goals_dict[new_id] = goal
             self.id_list[self.id_list.index(self.current_goal_id)] = new_id
             self.current_goal_id = new_id
-            self.setSaveEnabled()
-        if new_state != self.old_checkbox_state:
-            self.goals_dict[self.current_goal_id].goal_data[14] = new_state
             self.setSaveEnabled()
         self.dialog.close()
 
@@ -770,16 +788,21 @@ class GoalTab(QWidget):
         self.id_list.append(self.current_goal_id)
 
     def delete_goal(self, goal_id):
-        DataManager.deleteMainData("goal", goal_id)
-        self.id_list.remove(goal_id)
-        self.goal_list_update_req.emit()
-        if not self.id_list:
-            self.goal_tree_list_widget.currentItemChanged.disconnect()
-            self.previous_window_req.emit()
+        DataManager.deleteMainData("goal", goal_id, self.goals_dict[self.current_goal_id].goal_data[13])
         if len(self.current_goal_id.split(".")) > 2 and not self.goals_dict[self.current_goal_id].goal_data[13]:
             self.recalculateValues()
-        self.goals_dict.pop(goal_id)
-        self.goal_tree_list_widget.takeItem(self.goal_tree_list_widget.currentRow())
+        id_list = [item for item in self.id_list]
+        for iD in id_list:
+            if iD.startswith(goal_id + ".") or iD == goal_id:
+                self.goals_dict.pop(iD, "")
+                self.id_list.remove(iD)
+        self.goal_list_update_req.emit()
+        self.goal_tree_list_widget.currentItemChanged.disconnect()
+        if not self.id_list:
+            self.previous_window_req.emit()
+        else:
+            self.update_goal_tree()
+            self.goal_tree_list_widget.currentItemChanged.connect(self.display_goal)
 
     def setSaveEnabled(self, *args, value=True):
         self.save_button.setEnabled(value)
@@ -814,8 +837,8 @@ class GoalTab(QWidget):
         note = self.cell_list[3].toPlainText()
 
         is_group = int(self.cell_list[6].isChecked())
-        if self.goals_dict[self.current_goal_id].goal_data[14] != "":
-            is_showing_in_list = int(self.goals_dict[self.current_goal_id].goal_data[14])
+        if len(self.current_goal_id.split(".")) > 2:
+            is_showing_in_list = 0
         else:
             is_showing_in_list = 1
 
@@ -871,11 +894,12 @@ class GoalTab(QWidget):
                 else:
                     goal_data = (self.current_goal_id, goal_name) + tuple(characts) + (used_skills, self.goals_dict[self.current_goal_id].goal_data[7], note, image_list, goal_progress, custom_characts, cc_stats, is_group, is_showing_in_list, self.old_goal_id)
                 DataManager.updateMainData("goal", goal_data)
-                if previous:
-                    current_widget = self.goal_tree_list_widget.itemWidget(previous)
-                else:
-                    current_widget = self.goal_tree_list_widget.itemWidget(self.goal_tree_list_widget.currentItem())
-                current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[2]), goal_data[10].split(":")[0], is_group)
+                #if previous:
+                #    current_widget = self.goal_tree_list_widget.itemWidget(previous)
+                #else:
+                #    current_widget = self.goal_tree_list_widget.itemWidget(self.goal_tree_list_widget.currentItem())
+                #current_widget.updateWidget(self.current_goal_id, goal_name, float(goal_data[2]), goal_data[10].split(":")[0], is_group)
+                self.update_goal_tree()
             else:
                 if is_group:
                     if len(characts) < 4:

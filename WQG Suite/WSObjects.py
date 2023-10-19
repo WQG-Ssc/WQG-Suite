@@ -39,7 +39,7 @@ class Goal(QObject):
         self.cell_list[2].setImagesList(images_list)
         self.cell_list[6].blockSignals(True)
         self.cell_list[6].setChecked(isGroup)
-        self.cell_list[6].setDisabled(isGroup)
+        self.cell_list[6].setDisabled(self.isGoalExists)
         self.cell_list[6].blockSignals(False)
 
         self.cell_list[1].setText(self.goal_data[1])

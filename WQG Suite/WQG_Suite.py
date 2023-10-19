@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
             conn = sql.connect(main_db)
             cur = conn.cursor()
             cur.execute("CREATE TABLE Main_statistics (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT)")
-            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, is_group INTEGER, showing_in_list INTEGER)")
+            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, type TEXT, showing_in_list INTEGER)")
             cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
             cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT, sections_position TEXT)")
             cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")

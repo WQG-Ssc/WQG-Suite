@@ -233,9 +233,16 @@ def deleteMainData(data_type, *args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
     if data_type == "branch":
-        cur.execute("DELETE FROM Branches WHERE name == ?", args)
+        cur.execute("DELETE FROM Branches WHERE RowID == ?", args)
+        cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
     if data_type == "goal":
-        cur.execute("DELETE FROM Goals WHERE ID == ?", args)
+        if args[1]:
+            print("v1")
+            cur.execute(f"DELETE FROM Goals WHERE ID == '{args[0]}'")
+            cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
+        else:
+            print('v2')
+            cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
     if data_type == "characteristic":
         cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
     conn.commit()
@@ -245,8 +252,10 @@ def deleteMainData(data_type, *args):
 def getGoalTree(goal_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID LIKE '{goal_id}%' ORDER BY ID ASC")
+    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID == '{goal_id}'")
     goal_tree = cur.fetchall()
+    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID LIKE '{goal_id}.%' ORDER BY ID ASC")
+    goal_tree += cur.fetchall()
     conn.close()
     return goal_tree
 
@@ -254,7 +263,7 @@ def getGoalTree(goal_id):
 def getGoalIDs(parent_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{parent_id}%'")
+    cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{parent_id}.%'")
     goal_tree = cur.fetchall()
     conn.close()
     return goal_tree
