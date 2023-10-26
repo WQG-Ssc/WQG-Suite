@@ -1,15 +1,18 @@
 import sqlite3 as sql
+import WSwidgets as ws
 import re
+from PyQt6.QtCore import QDate
 main_db = r"Files\data\main_test.db"
 other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        try: 
-            return func(*args, **kwargs)
-        except sql.Error as error:
-            print(f'An error occurred in {func.__name__}: {error}')
-            return False
+        return func(*args, **kwargs)
+        #try: 
+        #    return func(*args, **kwargs)
+        #except Exception as error:
+        #    print(f'An error occurred in {func.__name__}: {error}')
+        #    return False
     return wrapper
 
 @exception_handler
@@ -51,7 +54,7 @@ def loadMainData(data_type, *args):
         cur.execute("SELECT * FROM Graphs")
 
     if data_type == "goal_custom":#Custom characteristics
-        cur.execute("SELECT cc_stats FROM Goals WHERE ID == ?", (args))
+        cur.execute("SELECT cc_stats, is_group FROM Goals WHERE ID == ?", args)
         cc_stats = cur.fetchone()
         conn.close()
         return cc_stats
@@ -74,6 +77,12 @@ def loadMainData(data_type, *args):
         conn.close()
         return color
 
+    if data_type == "day_data":
+        cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ?", args)
+
+    if data_type == "group_statistics":
+        cur.execute(f"SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
+
     data = cur.fetchall()
     conn.close()
     return data
@@ -95,6 +104,9 @@ def saveMainData(data_type, args):
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
         
+    if data_type == "day":
+        cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time', 'Shedule completing', 'Shedule completing accuracy') VALUES (?, ?, ?, ?, ?, ?, ?)", args)
+
     conn.commit()
     conn.close()
 
@@ -105,8 +117,8 @@ def recalculateValues(layer):
     supergoal_id = ".".join(layer[:-1])
 
     print(f"supergoal_id:{supergoal_id}")
-    cur.execute("SELECT custom_characteristics FROM Goals WHERE ID == ?", (supergoal_id,))
-    characts = cur.fetchone()[0]
+    cur.execute("SELECT progress, custom_characteristics, cc_stats FROM Goals WHERE ID == ?", (supergoal_id,))
+    progress, characts, supergoal_cc_stats = cur.fetchone()
     print(f"characts:{characts}")
     charactsToRecalc = []
     allCharacts = {}
@@ -133,7 +145,7 @@ def recalculateValues(layer):
     print(f"charactsToRecalc{charactsToRecalc}")
 
     skills_dict = {}
-    cc_stats_dict = {}
+    cc_stats_dict = {charact:{} for charact in charactsToRecalc}
     time = 0.0
 
     skills = ""
@@ -168,11 +180,12 @@ def recalculateValues(layer):
 
                     if goal_data[3]:
                         for stat in goal_data[3].split("|"):
+                            print(stat)
                             charact_name, stats = stat.split(":")
                             if charact_name in charactsToRecalc:
                                 for record in stats.split(","):
                                     date, value = record.split(" ")
-                                    if date in cc_stats_dict[charact_name][date]:
+                                    if date in cc_stats_dict[charact_name]:
                                         cc_stats_dict[charact_name][date] += float(value)
                                     else:
                                         cc_stats_dict[charact_name][date] = float(value)
@@ -185,13 +198,15 @@ def recalculateValues(layer):
             print(f"skills:{skills}")
             print(f"time:{time}")
 
-            if cc_stats_dict:
+            if charactsToRecalc:
                 for charact in cc_stats_dict.keys():
                     records = ""
                     for date in cc_stats_dict[charact].keys():
-                        records += f"{date}:{cc_stats_dict[charact][date]}"
+                        records += f"{date} {cc_stats_dict[charact][date]}"
+                    if not records:
+                        records = QDate.currentDate().toString('yyyy-MM-dd') + " 0"
                     cc_stats += f"{charact}:{records}|"
-                cc_stats.rstrip("|")
+                cc_stats = cc_stats.rstrip("|")
     else:
         for dynamic_cc in charactsToRecalc:
             allCharacts.pop(dynamic_cc)
@@ -207,9 +222,9 @@ def recalculateValues(layer):
         print(f"cc_stats:{cc_stats}")
     else:
         cur.execute("UPDATE Goals SET used_skills = ?, time = ? WHERE ID == ?", (skills, time, supergoal_id))
-
     conn.commit()
     conn.close()
+    recalculateProgress(supergoal_id, progress.split(":")[1], supergoal_cc_stats, True)
 
 @exception_handler
 def updateMainData(data_type, args):
@@ -225,6 +240,10 @@ def updateMainData(data_type, args):
         cur.execute("UPDATE Goals SET ID = ?, name = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ?, cc_stats = ?, is_group = ?, showing_in_list = ? WHERE ID == ?", args)
     if data_type == "Characteristics":
         cur.execute("UPDATE Characteristics SET name = ?, c_type = ?, v_type = ? WHERE name == ?", args)
+    if data_type == "goal_characts":
+        cur.execute("UPDATE Goals SET cc_stats = ?, progress = ? WHERE ID == ?", args)
+    if data_type == "progress":
+        cur.execute("UPDATE Goals SET progress = ? WHERE ID == ?", args)
     conn.commit()
     conn.close()
 
@@ -250,9 +269,9 @@ def deleteMainData(data_type, *args):
 def getGoalTree(goal_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID == '{goal_id}'")
+    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group FROM Goals WHERE ID == '{goal_id}'")
     goal_tree = cur.fetchall()
-    cur.execute(f"SELECT ID, name, progress, time, is_group FROM Goals WHERE ID LIKE '{goal_id}.%' ORDER BY ID ASC")
+    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group FROM Goals WHERE ID LIKE '{goal_id}.%' ORDER BY ID ASC")
     goal_tree += cur.fetchall()
     conn.close()
     return goal_tree
@@ -265,3 +284,29 @@ def getGoalIDs(parent_id):
     goal_tree = cur.fetchall()
     conn.close()
     return goal_tree
+
+def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=False):
+    if p_charact == "Hours":
+        goal_time = 0
+        records = loadMainData("statistics", goal_id)
+        if isGroup:
+            records += loadMainData("group_statistics", goal_id)
+        for record in records:
+            start_time = ws.calculate_msecs(record[0])
+            end_time = ws.calculate_msecs(record[1])
+            record_time = end_time - start_time
+            goal_time += record_time
+        goal_time /= 3600000
+        progress_str = f"{goal_time}:Hours"
+        print(f"goal_time:{goal_time}")
+    else:
+        cc_stats = loadMainData("goal_custom", goal_id)[0]
+        charact_stats = [item.split(":")[1] for item in cc_stats.split("|") if item.split(":")[0] == p_charact][0]
+        print(f"characts_stats:{charact_stats}")
+        progress_str = str(sum([float(item.split(" ")[1]) for item in charact_stats.split(",")])) + ":" + p_charact
+        print(progress_str)
+        print(goal_id)
+    if returning:
+        return progress_str
+    else:
+        updateMainData("progress", [progress_str, goal_id])

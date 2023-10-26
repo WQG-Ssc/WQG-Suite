@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBo
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
 from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from typing import Union
 import tempfile
 from plotly.io import to_html
 import plotly.graph_objs as go
@@ -190,6 +189,8 @@ class GoalBranch(QWidget):
         action = menu.exec(self.mapToGlobal(event.pos()))
 
 def getGoalImage(image_path, goal_progress, d_diff):
+    if goal_progress > 100:
+        goal_progress = 100
     image = QPixmap(image_path).scaled(75, 75, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
     size = image.size()
     if size.height() > 75 or size.width() > 75:
@@ -212,7 +213,7 @@ def getGoalImage(image_path, goal_progress, d_diff):
     painter.setPen(QPen(QColor(getGoalColor(d_diff)), 3, Qt.PenStyle.SolidLine))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     rect = QRectF(2.0, 2.0, 95.0, 95.0)
-    painter.drawArc(rect, 90 * 16, -120 * 16)
+    painter.drawArc(rect, 90 * 16, goal_progress * -3.6 * 16)
     painter.end()
 
     return template
@@ -243,7 +244,10 @@ class dDiffIndicator(QLabel):
 class GoalProgressBar(QProgressBar):
     def __init__(self, d_diff, goal_progress, isMain):
         super().__init__()
-        self.goal_progress = goal_progress
+        if goal_progress > 100:
+            self.goal_progress = 100
+        else:
+            self.goal_progress = goal_progress
         self.d_diff = d_diff
         
         self.isMain = isMain
@@ -256,9 +260,9 @@ class GoalProgressBar(QProgressBar):
         self.setUpProgressBar()
 
     def setUpProgressBar(self):
-        color = getGoalColor(self.d_diff)
+        color = getGoalColor(int(self.d_diff))
         self.setStyleSheet("QProgressBar::chunk{background-color:" + color + "}")
-        self.setValue(int(self.goal_progress))
+        self.setValue(self.goal_progress)
 
     def updateGoalProgressBar(self, goal_progress, d_diff):
         self.goal_progress = goal_progress
@@ -484,14 +488,14 @@ class GoalTreeItem(QWidget):
         if QMessageBox.question(self, "Delete goal", "Do you want to delete this goal?") == QMessageBox.StandardButton.Yes:
             self.goalDeleted.emit(self.goal_id)
 
-    def updateWidget(self, goal_id, goal_name, d_diff, goal_progress, isGroup):
-        self.goal_id = goal_id
-        self.goal_name = goal_name
-        self.d_diff = d_diff
-        self.isGroup = isGroup
-        self.goal_progress = goal_progress
-        self.label.setText(self.goal_id + " " + self.goal_name)
-        self.icon.updateGoalProgressBar(self.goal_progress, self.d_diff)
+    #def updateWidget(self, goal_id, goal_name, d_diff, goal_progress, isGroup):
+    #    self.goal_id = goal_id
+    #    self.goal_name = goal_name
+    #    self.d_diff = d_diff
+    #    self.isGroup = isGroup
+    #    self.goal_progress = goal_progress
+    #    self.label.setText(self.goal_id + " " + self.goal_name)
+    #    self.icon.updateGoalProgressBar(self.goal_progress, self.d_diff)
 
     def contextMenuEvent(self, event):
         menu = QMenu()
@@ -619,20 +623,21 @@ class GraphItem(QWidget):
             remove_graph.setObjectName("Tool")
 
             if self.graph_type == "Goals":
-                cc_stats = DataManager.loadMainData("goal_custom", self.goal_id)[0]# cc: date value, date value,|
-                cc_stats = cc_stats.split("|")
-                self.cc_stats_dict = {}
-                for cc in cc_stats:
-                    cc = cc.split(":")
-                    self.cc_stats_dict[cc[0]] = cc[1].split(",")
+                cc_stats, self.isGroup = DataManager.loadMainData("goal_custom", self.goal_id)# cc: date value, date value,|
+                if cc_stats:
+                    cc_stats = cc_stats.split("|")
+                    self.cc_stats_dict = {}
+                    for cc in cc_stats:
+                        cc = cc.split(":")
+                        self.cc_stats_dict[cc[0]] = cc[1].split(",")
 
-                self.cc_names = list(self.cc_stats_dict.keys())
+                    self.cc_names = list(self.cc_stats_dict.keys())
 
-                self.showing_charact_switcher = QPushButton(self.showing_charact)
-                self.showing_charact_switcher.clicked.connect(self.switch_showing_charact)
-                self.sct_state = 1
-                h_box.addWidget(self.showing_charact_switcher)
-            self.value_type = "Numeric"
+                    self.showing_charact_switcher = QPushButton(self.showing_charact)
+                    self.showing_charact_switcher.clicked.connect(self.switch_showing_charact)
+                    self.sct_state = 1
+                    h_box.addWidget(self.showing_charact_switcher)
+                self.value_type = "Numeric"
             
             h_box.addWidget(remove_graph)
         h_box.setContentsMargins(10, 0, 0, 0)
@@ -648,6 +653,8 @@ class GraphItem(QWidget):
             if self.graph_type == "Goals":
                 if self.showing_charact == "h":
                     stat = DataManager.loadMainData("statistics", self.goal_id)
+                    if self.isGroup:
+                        stat += DataManager.loadMainData("group_statistics", self.goal_id)
                     previous_date = ""
                     for s in stat:
                         start_time = calculate_msecs(s[0])
@@ -902,3 +909,14 @@ color_scale = {
 def calculate_msecs(interval_str):
     time_list = interval_str.split(":")
     return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000
+
+def calculate_progress(progress, time, characts):
+    progress, p_charact = progress.split(":")
+    if progress != "0":
+        if p_charact == "Hours":
+            percents = float(progress) / float(time) * 100
+        else:
+            percents = float(progress) / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on max value from goal's custom characts
+    else:
+        percents = 0
+    return percents

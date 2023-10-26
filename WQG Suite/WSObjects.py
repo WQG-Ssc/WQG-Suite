@@ -1,6 +1,7 @@
 # -*- coding: cp1251 -*-
 import DataManager
 import WSwidgets as ws
+import WStabs as wst
 from PyQt6.QtWidgets import QListWidgetItem, QPushButton, QLineEdit, QLabel, QHBoxLayout, QWidget
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt6.QtGui import QIcon
@@ -47,7 +48,11 @@ class Goal(QObject):
         note_text_edit.blockSignals(True)
         note_text_edit.setPlainText(self.goal_data[8])#Change textEdit's text without triggering textChanged signal
         note_text_edit.blockSignals(False)
-        self.cell_list[4].setText("Progress: " + self.goal_data[10].split(":")[0])
+        if self.isGoalExists:
+            goal_progress = str(ws.calculate_progress(self.goal_data[10], self.goal_data[2], self.goal_data[11]))
+        else:
+            goal_progress = "0"
+        self.cell_list[4].setText(f"Progress: {goal_progress}%")
 
         #Отобразим значения стандартных характеристик
         characts_edits = self.cell_list[7:11]

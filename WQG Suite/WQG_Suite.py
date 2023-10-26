@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
             cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, type TEXT, showing_in_list INTEGER)")
             cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
             cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT, sections_position TEXT)")
-            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")
+            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
             cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT)")
             cur.execute("CREATE TABLE Skills_statistics (date TEXT)")
@@ -268,8 +268,11 @@ class MainWindow(QMainWindow):
         obj_manager_button = QPushButton()
         obj_manager_button.setIcon(QIcon(i_dir + r"\search.png"))
         obj_manager_button.clicked.connect(self.open_obj_manager)
+        finish_day_button = QPushButton()
+        finish_day_button.setIcon(QIcon(i_dir + r"\finish day.png"))
+        finish_day_button.clicked.connect(self.form)
 
-        tools = [toggle_button, settings_button, obj_manager_button, time_manager_button]
+        tools = [toggle_button, settings_button, obj_manager_button, finish_day_button, time_manager_button]
 
         for tool in tools:
             tool.setObjectName("Tool")
@@ -351,6 +354,9 @@ class MainWindow(QMainWindow):
 
         self.stacked_widget.addWidget(goal_tab)
         self.next_window()
+
+    def form(self):
+        self.form = wstabs.Form()
 
     def goalListUpdate(self):
         self.isGoalListNeedsToBeUpdated = True
