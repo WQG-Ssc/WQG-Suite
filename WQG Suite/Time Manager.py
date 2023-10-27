@@ -5,8 +5,10 @@ import sqlite3 as sql
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QWidget, QSizePolicy, QMessageBox, QDialog, QStackedWidget, QLineEdit, QCheckBox, QFileDialog
 from PyQt6.QtGui import QAction, QFont, QIcon
 from PyQt6.QtCore import Qt, QTime, QTimer, QSize, QDate, QEvent
+import WSwidgets as ws
+import DataManager
 
-data_base = r"Files\data\main.db"
+data_base = r"Files\data\main_test.db"
 config_path = r"Files\config\time_manager\config.ini"
 version = "0.1.1 public"
 app_icon_path = os.path.abspath(r"Files\icons\Time Manager icon.ico")
@@ -20,45 +22,41 @@ QPushButton#Round{
     border: 2px solid #FFD300;
     border-radius: 28
     }
-
 QPushButton::pressed#Round{
     background-color: #7F6900;
     }
-
 QPushButton::disabled#Round{
     border: 2px solid #d9d9d9
     }
-
 QPushButton#CommonButton{
     border: 1px solid #FFD300
     }
-
 QPushButton::pressed#CommonButton{
     background-color: #7F6900
     }
-
 QLineEdit{
     background-color: #000000;
     color: #FFD300;
     border: none;
     font: 16pt 'Segoe UI'
     }
-
 QLineEdit#Timer{
-    font: 12pt 'Segoe UI'}
-
+    font: 12pt 'Segoe UI'
+    }
 QLabel{
     color: #FFD300;
     font: 16pt 'Segoe UI'
     }
-
 QLabel#Info{
     color: #FFD300;
     font: 12pt 'Segoe UI'
     }
-
 QWidget{
     background-color: #000000
+    }
+QListWidget{
+    border: 1px solid #FFD300;
+    color: #FFD300;
     }"""
 
 class MainWindow(QMainWindow):
@@ -89,6 +87,7 @@ class MainWindow(QMainWindow):
             config.read(config_path)
 
             self.task_ID = config.get("Data", "Task_ID")
+            self.task_name = config.get("Data", "Task_name")
             self.record_time = config.get("Data", "Record_time")
             self.timer_data = config.get("Timers", "Timer_1").split(",")
             self.timer_remaining_time = config.getint("Data", "Additional_timer_remaining_time")
@@ -108,6 +107,7 @@ class MainWindow(QMainWindow):
             config.add_section("Data")
             config.set("Data", "Record_time", "00:00:00")
             config.set("Data", "Task_ID", "")
+            config.set("Data", "Task_name", "")
             config.set("Data", "Additional_timer_remaining_time", "0")
             config.set("Data", "Directory", "")
 
@@ -161,10 +161,6 @@ class MainWindow(QMainWindow):
 
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText("Add Title...")
-        if self.task_ID:
-            self.title_edit.setText(self.task_ID)
-            self.expand_line_edit()
-        self.title_edit.textChanged.connect(self.expand_line_edit)
 
         if not self.title_edit.text():
             self.toggle_button.setEnabled(False)
@@ -207,7 +203,31 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setLayout(main_v_box)
 
+        if self.task_ID:
+            self.title_edit.setText(self.task_name)
+            self.expand_line_edit()
+        self.title_edit.textChanged.connect(self.expand_line_edit)
+
+        self.object_manager = ws.ObjectManager(self, self.title_edit, ["Skills", "Goals"])
+        self.object_manager.selected.connect(self.get_task_id)
+
+        if self.task_ID:
+            self.object_manager.isSelected = True
+
         self.stacked_widget.addWidget(container)
+
+    def get_task_id(self, name, goal_id, object_type):
+        if object_type == "Goals":
+            if DataManager.loadMainData("goal", goal_id)[13]:
+                QMessageBox.warning(self, "Groups cannot be selected directly for completing", "Select group's subgoal to start completing the group")
+                self.title_edit.setText("")
+                self.object_manager.isSelected = False
+            else:
+                self.task_ID = goal_id
+                self.task_name = name
+        else:
+            self.task_ID = "s:" + name
+            self.task_name = name
 
     def show_info(self):
         self.dialog = QDialog()
@@ -297,7 +317,7 @@ class MainWindow(QMainWindow):
             file_name = r"\today's statistics.txt"
             conn = sql.connect(data_base)
             cur = conn.cursor()
-            cur.execute("SELECT start_time, end_time, task_ID FROM Main_statictics WHERE date == ?", (date,))
+            cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ?", (date,))
             records = cur.fetchall()
             if records:
                 for record in records:
@@ -322,7 +342,7 @@ class MainWindow(QMainWindow):
             date_list = []
             conn = sql.connect(data_base)
             cur = conn.cursor()
-            cur.execute("SELECT date FROM Main_statictics")
+            cur.execute("SELECT date FROM Main_statistics")
             dates = cur.fetchall()
 
             if dates:
@@ -330,7 +350,7 @@ class MainWindow(QMainWindow):
                     if date[0] not in date_list:
                         date_list.append(date[0])
                 for date in date_list:
-                    cur.execute("SELECT start_time, end_time, task_ID FROM Main_statictics WHERE date == ?", (date,))
+                    cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ?", (date,))
                     records = cur.fetchall()
                     records_dict = {}
                     for record in records:
@@ -350,11 +370,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"Error: {error}")
 
     def write_stats(self, records_dict, file_name, date):
-            with open(self.directory + file_name, "a") as file:
-                file.write(f"Statistics for {date}:\n")
-                for record in records_dict.items():
-                    file.write(f"{record[0]}: {self.to_str(record[1])}\n")
-                file.write('\n')
+        with open(self.directory + file_name, "a") as file:
+            file.write(f"Statistics for {date}:\n")
+            for record in records_dict.items():
+                file.write(f"{record[0]}: {self.to_str(record[1])}\n")
+            file.write('\n')
 
     def set_timers(self):
         title = QLabel("Add timer for notifications")
@@ -458,39 +478,42 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() - 1)
 
     def toggle_record(self):
-        self.stop_button.setEnabled(True)
-        if self.isPaused:
-            self.isRecordStarted = True
-            self.isPaused = False
-            self.toggle_button.setIcon(QIcon(r"Files\Icons\pause.png"))
-            self.interval_start_time = QTime.currentTime().toString()
-            self.main_timer.start()
-            if self.isTimerEnabled:
-                if not self.isTimeouted:
-                    if self.timer_remaining_time: #¬ключить таймер
-                        self.timer.setInterval(self.timer_remaining_time)
-                        self.timer_remaining_time = 0
-                        self.timer.timeout.connect(self.set_normal)
-                        self.timer.start()
-                    else:
-                        self.create_timer(self.timer_data[0])
-                        self.timer.start()
-            if self.main_timer_remaining_time:
-                self.main_timer.setInterval(self.main_timer_remaining_time)
+        if self.object_manager.isSelected:
+            self.stop_button.setEnabled(True)
+            if self.isPaused:
+                self.isRecordStarted = True
+                self.isPaused = False
+                self.toggle_button.setIcon(QIcon(r"Files\Icons\pause.png"))
+                self.interval_start_time = QTime.currentTime().toString()
+                self.main_timer.start()
+                if self.isTimerEnabled:
+                    if not self.isTimeouted:
+                        if self.timer_remaining_time: #¬ключить таймер
+                            self.timer.setInterval(self.timer_remaining_time)
+                            self.timer_remaining_time = 0
+                            self.timer.timeout.connect(self.set_normal)
+                            self.timer.start()
+                        else:
+                            self.create_timer(self.timer_data[0])
+                            self.timer.start()
+                if self.main_timer_remaining_time:
+                    self.main_timer.setInterval(self.main_timer_remaining_time)
                 
-                self.main_timer.timeout.connect(self.set_normal)
+                    self.main_timer.timeout.connect(self.set_normal)
+            else:
+                self.isPaused = True
+                self.toggle_button.setIcon(QIcon(r"Files\Icons\start.png"))
+                self.write_statistics()
+                self.main_timer_remaining_time = self.main_timer.remainingTime()
+                self.main_timer.stop()
+                if self.isTimerEnabled:
+                    if self.isTimeouted:
+                        self.timer_remaining_time = 0
+                    else:
+                        self.timer_remaining_time = self.timer.remainingTime() + 1#Ёто будет отмечать что таймер включен
+                        self.timer.stop()
         else:
-            self.isPaused = True
-            self.toggle_button.setIcon(QIcon(r"Files\Icons\start.png"))
-            self.write_statistics()
-            self.main_timer_remaining_time = self.main_timer.remainingTime()
-            self.main_timer.stop()
-            if self.isTimerEnabled:
-                if self.isTimeouted:
-                    self.timer_remaining_time = 0
-                else:
-                    self.timer_remaining_time = self.timer.remainingTime() + 1#Ёто будет отмечать что таймер включен
-                    self.timer.stop()
+            QMessageBox.warning(self, "Unable to start record", "Select a task to start a record")
 
     def toggle_timer(self, button, t_edit=None):
         if button.isChecked():
@@ -585,6 +608,7 @@ class MainWindow(QMainWindow):
             self.isRecordStarted = False
             self.stop_button.setEnabled(False)
             self.main_timer_remaining_time = 0
+            self.object_manager.isSelected = False
 
     def send_notification(self):
         if not self.isRecurring:
@@ -600,11 +624,10 @@ class MainWindow(QMainWindow):
     def write_statistics(self):
         self.interval_end_time = QTime.currentTime().toString()
         if self.interval_start_time != self.interval_end_time:
-            self.task_ID = self.title_edit.text()
             try:
                 conn = sql.connect(data_base)
                 cur = conn.cursor()
-                cur.execute("INSERT INTO Main_statictics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", (self.interval_start_time, self.interval_end_time, self.task_ID, QDate.currentDate().toString("dd/MM/yyyy")))
+                cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", (self.interval_start_time, self.interval_end_time, self.task_ID, QDate.currentDate().toString("yyyy-MM-dd")))
                 conn.commit()
                 conn.close()
             except sql.Error as error:
@@ -626,12 +649,15 @@ class MainWindow(QMainWindow):
             self.dialog.close()
         if not self.isPaused:
             self.toggle_record()
-        else:
-            self.task_ID = self.title_edit.text()
         config = configparser.ConfigParser()
         config.read(config_path)
         config.set("Data", "Record_time", self.record_time.toString())
-        config.set("Data", "Task_ID", self.task_ID)
+        if self.object_manager.isSelected:
+            config.set("Data", "Task_ID", self.task_ID)
+            config.set("Data", "Task_name", self.task_name)
+        else:
+            config.set("Data", "Task_ID", "")
+            config.set("Data", "Task_name", "")
         config.set("Data", "Remaining_time", str(self.main_timer_remaining_time))
         if self.timer_remaining_time == -1: 
             self.timer_remaining_time = 0

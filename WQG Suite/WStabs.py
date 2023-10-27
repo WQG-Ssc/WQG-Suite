@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal, QDate
-from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QColor
+from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor
+from WQG_Suite import user_config_path
 import plotly.graph_objs as go
 import WSwidgets as ws
 import WSobjects as wsobj
-import DataManager
+import DataManager, configparser
 i_dir = r"Files\icons"
 
 class ProfileTab(QWidget):
@@ -461,6 +462,13 @@ class GoalTab(QWidget):
         self.save_button.clicked.connect(self.save_goal)
         self.save_button.setEnabled(False)
 
+        self.complete_button = QPushButton()
+        self.complete_button.setFixedSize(60, 60)
+        self.complete_button.setIconSize(QSize(30, 30))
+        self.complete_button.setIcon(QIcon(i_dir + r"\complete goal.png"))
+        self.complete_button.clicked.connect(self.complete_goal)
+        self.complete_button.setEnabled(False)
+
         self.id_list = []
         if self.item:
             self.main_goal_id = self.item.text(self.sections_pos.index("ID"))
@@ -480,6 +488,11 @@ class GoalTab(QWidget):
             goal_image_label.imageAdded.connect(lambda: add_images_dir_button.setEnabled(True))
         goal_image_label.imageAdded.connect(lambda: self.additional_images_label.setMainImage(goal_image_label.image_path))
 
+        buttons_v_box = QVBoxLayout()
+        buttons_v_box.addStretch()
+        buttons_v_box.addWidget(self.save_button, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+        buttons_v_box.addWidget(self.complete_button, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+
         gb_h_box = QHBoxLayout()
         gb_h_box.addWidget(characts_gb)
         gb_h_box.addWidget(skills_gb)
@@ -495,7 +508,7 @@ class GoalTab(QWidget):
         main_grid.addLayout(middle_v_box, 1, 1)
         main_grid.addWidget(note_text_edit, 2, 1, 1, 2)
         main_grid.addLayout(v_box, 0, 2, alignment=Qt.AlignmentFlag.AlignLeft)
-        main_grid.addWidget(self.save_button, 2, 3, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        main_grid.addLayout(buttons_v_box, 2, 3)
         main_grid.setColumnStretch(2, 1)
 
         self.setLayout(main_grid)
@@ -761,7 +774,7 @@ class GoalTab(QWidget):
         if calc_mode != self.old_progress_calc_mode:
             self.goals_dict[self.current_goal_id].goal_data[10] = DataManager.recalculateProgress(self.current_goal_id, calc_mode, self.goals_dict[self.current_goal_id].goal_data[12], self.goals_dict[self.current_goal_id].goal_data[12], returning=True)
             self.setSaveEnabled()
-            #Here needs to be the function which calculates progress
+
         if new_id != self.current_goal_id:
             goal = self.goals_dict.pop(self.current_goal_id)
             self.goals_dict[new_id] = goal
@@ -792,6 +805,10 @@ class GoalTab(QWidget):
             goal = wsobj.Goal(self.cell_list, self.list_widget_list, self.add_skill_or_charact, self.current_goal_id)
             goal.skillCharactChanged.connect(self.setSaveEnabled)
             self.goals_dict[self.current_goal_id] = goal
+        if self.goals_dict[self.current_goal_id].goal_data[7] != "completed":
+            self.complete_button.setEnabled(True)
+        else:
+            self.complete_button.setEnabled(False)
 
     def add_subgoal(self, parent_id):
         subgoal = wsobj.Goal(self.cell_list, self.list_widget_list, self.add_skill_or_charact)
@@ -801,6 +818,7 @@ class GoalTab(QWidget):
 
     def delete_goal(self, goal_id):
         DataManager.deleteMainData("goal", goal_id, self.goals_dict[self.current_goal_id].goal_data[13])
+        DataManager.deleteMainData("statistics", goal_id, self.goals_dict[self.current_goal_id].goal_data[13])
         if len(self.current_goal_id.split(".")) > 2 and not self.goals_dict[self.current_goal_id].goal_data[13]:
             self.recalculateValues()
         id_list = [item for item in self.id_list]
@@ -832,6 +850,11 @@ class GoalTab(QWidget):
         if dir_path:
             self.additional_images_label.setDir(dir_path)
             self.setSaveEnabled()
+
+    def complete_goal(self):
+        if QMessageBox.question(self, "Goal completing", "Complete goal?") == QMessageBox.StandardButton.Yes:
+            progress = ws.calculate_progress(self.goals_dict[self.current_goal_id].goal_data[10], self.goals_dict[self.current_goal_id].goal_data[2], self.goals_dict[self.current_goal_id].goal_data[11])
+            self.widget = ws.CompleteGoalWindow(self, self.goals_dict[self.current_goal_id].goal_data[9].split(",")[0], progress, self.goals_dict[self.current_goal_id].goal_data[2])
 
     def save_goal(self, previous=None):
         #1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7 - isgroup, 8-12 - characts lineEdits
@@ -936,6 +959,8 @@ class GoalTab(QWidget):
                 self.goal_tree_list_widget.blockSignals(True)
                 self.goal_tree_list_widget.setCurrentItem(list_widget_item)
                 self.goal_tree_list_widget.blockSignals(False)
+                self.complete_button.setEnabled(True)
+
             self.save_button.setEnabled(False)
             self.areChangesMade = False
             self.changesSaved.emit()
@@ -1072,151 +1097,156 @@ class StatisticsTab(QWidget):
                 break
 
 class Form(QDialog):
-    def __init__(self):
+    def __init__(self, FormFillingDate):
         super().__init__()
-        self.setModal(True)
-        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
-        self.date = QDate().currentDate().toString("yyyy-MM-dd")
-        print(f"date:{self.date}")
+        self.FormFillingDate = FormFillingDate
+        if self.FormFillingDate != QDate().currentDate().toString("yyyy-MM-dd"):
+            self.setModal(True)
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+            self.date = QDate().currentDate().toString("yyyy-MM-dd")
+            print(f"date:{self.date}")
 
-        today_records = DataManager.loadMainData("day_data", self.date)
-        self.records_dict = {}
-        if today_records:
-            for record in today_records:
-                start_time = ws.calculate_msecs(record[0])
-                end_time = ws.calculate_msecs(record[1])
-                record_time = end_time - start_time
-                if record[2] in self.records_dict:
-                    self.records_dict[record[2]] += record_time
-                else:
-                    self.records_dict[record[2]] = record_time
-        print(f"records_dict:{self.records_dict}")
-
-        today_label = QLabel("Today")
-        today_label.setFont(QFont("Calibri", 24, 700))
-
-        regex = QRegularExpression("[A-E]")
-        validator = QRegularExpressionValidator(regex)
-        m_state_label = QLabel("Mental state:")
-        
-        m_state_line_edit = QLineEdit()
-        m_state_line_edit.setValidator(validator)
-        p_state_label = QLabel("Psysical state:")
-        p_state_line_edit = QLineEdit()
-        p_state_line_edit.setValidator(validator)
-
-        regex = QRegularExpression("[1-9]|10")
-        validator = QRegularExpressionValidator(regex)
-        day_rate_label = QLabel("Day rate:")
-        day_rate_line_edit = QLineEdit()
-        day_rate_line_edit.setValidator(validator)
-
-        self.day_stats_edits = [m_state_line_edit, p_state_line_edit, day_rate_line_edit]
-
-        change_label = QLabel("Change of dynamic characts")
-        change_list_widget = QListWidget()
-        day_note = QPlainTextEdit()
-        day_note.setPlaceholderText("How was your day?")
-
-        ok_button = QPushButton("OK")
-        ok_button.clicked.connect(self.save_day_data)
-
-        self.line_edit_dict = {}
-        self.goal_ccs_dict = {}
-        
-        for task in self.records_dict.keys():
-            if len(task.split(".")) > 1:
-                dynamic_ccs = []
-                print(f"task:{task}")
-                goal = DataManager.loadMainData("goal", task)
-                goal_name = goal[1]
-                ccs = goal[11]
-                if ccs:
-                    ccs = ccs.split(",")
-                    dynamic_ccs = [item.split(":")[0] for item in ccs if DataManager.loadMainData("characteristic", item.split(":")[0])[0] == "dynamic"]
-                print(f"dynamic_ccs:{dynamic_ccs}")
-                widget = QWidget()
-                h_box = QHBoxLayout()
-                label = QLabel(goal_name)
-                h_box.addWidget(label)
-                for cc in dynamic_ccs:
-                    charact_label = QLabel(cc + ":")
-                    line_edit = QLineEdit()
-                    line_edit.setFixedWidth(20)
-                    if goal[0] in self.line_edit_dict:
-                        self.line_edit_dict[goal[0]].append(line_edit)
-                        self.goal_ccs_dict[goal[0]].append(cc)
+            today_records = DataManager.loadMainData("day_data", self.date)
+            print(f"today:{today_records}")
+            self.records_dict = {}
+            if today_records:
+                for record in today_records:
+                    start_time = ws.calculate_msecs(record[0])
+                    end_time = ws.calculate_msecs(record[1])
+                    record_time = end_time - start_time
+                    if record[2] in self.records_dict:
+                        self.records_dict[record[2]] += record_time
                     else:
-                        self.line_edit_dict[goal[0]] = [line_edit]
-                        self.goal_ccs_dict[goal[0]] = [cc]
-                    h_box.addWidget(charact_label)
-                    h_box.addWidget(line_edit)
+                        self.records_dict[record[2]] = record_time
+            print(f"records_dict:{self.records_dict}")
+
+            today_label = QLabel("Today")
+            today_label.setFont(QFont("Calibri", 24, 700))
+
+            regex = QRegularExpression("[A-E]")
+            validator = QRegularExpressionValidator(regex)
+            m_state_label = QLabel("Mental state:")
+        
+            m_state_line_edit = QLineEdit()
+            m_state_line_edit.setValidator(validator)
+            p_state_label = QLabel("Psysical state:")
+            p_state_line_edit = QLineEdit()
+            p_state_line_edit.setValidator(validator)
+
+            regex = QRegularExpression("[1-9]|10")
+            validator = QRegularExpressionValidator(regex)
+            day_rate_label = QLabel("Day rate:")
+            day_rate_line_edit = QLineEdit()
+            day_rate_line_edit.setValidator(validator)
+
+            self.day_stats_edits = [m_state_line_edit, p_state_line_edit, day_rate_line_edit]
+
+            change_label = QLabel("Change of dynamic characts")
+            change_list_widget = QListWidget()
+            day_note = QPlainTextEdit()
+            day_note.setPlaceholderText("How was your day?")
+
+            ok_button = QPushButton("OK")
+            ok_button.clicked.connect(self.save_day_data)
+
+            self.line_edit_dict = {}
+            self.goal_ccs_dict = {}
+        
+            for task in self.records_dict.keys():
+                if len(task.split(".")) > 1:
+                    dynamic_ccs = []
+                    print(f"task:{task}")
+                    goal = DataManager.loadMainData("goal", task)
+                    goal_name = goal[1]
+                    ccs = goal[11]
+                    if ccs:
+                        ccs = ccs.split(",")
+                        dynamic_ccs = [item.split(":")[0] for item in ccs if DataManager.loadMainData("characteristic", item.split(":")[0])[0] == "dynamic"]
+                    print(f"dynamic_ccs:{dynamic_ccs}")
+                    widget = QWidget()
+                    h_box = QHBoxLayout()
+                    label = QLabel(goal_name)
+                    h_box.addWidget(label)
+                    for cc in dynamic_ccs:
+                        charact_label = QLabel(cc + ":")
+                        line_edit = QLineEdit()
+                        line_edit.setFixedWidth(20)
+                        if goal[0] in self.line_edit_dict:
+                            self.line_edit_dict[goal[0]].append(line_edit)
+                            self.goal_ccs_dict[goal[0]].append(cc)
+                        else:
+                            self.line_edit_dict[goal[0]] = [line_edit]
+                            self.goal_ccs_dict[goal[0]] = [cc]
+                        h_box.addWidget(charact_label)
+                        h_box.addWidget(line_edit)
                 
-                h_box.addStretch()
-                widget.setLayout(h_box)
-                item = QListWidgetItem()
-                item.setSizeHint(widget.sizeHint())
-                change_list_widget.addItem(item)
-                change_list_widget.setItemWidget(item, widget)
+                    h_box.addStretch()
+                    widget.setLayout(h_box)
+                    item = QListWidgetItem()
+                    item.setSizeHint(widget.sizeHint())
+                    change_list_widget.addItem(item)
+                    change_list_widget.setItemWidget(item, widget)
 
-        print(f"line_edit_dict{self.line_edit_dict}")
-        print(f"goal_ccs_dict:{self.goal_ccs_dict}")
+            print(f"line_edit_dict{self.line_edit_dict}")
+            print(f"goal_ccs_dict:{self.goal_ccs_dict}")
 
-        grid = QGridLayout()
-        grid.addWidget(m_state_label, 0, 0)
-        grid.addWidget(m_state_line_edit, 0, 1)
-        grid.addWidget(p_state_label, 1, 0)
-        grid.addWidget(p_state_line_edit, 1, 1)
-        grid.addWidget(day_rate_label, 2, 0)
-        grid.addWidget(day_rate_line_edit, 2, 1)
+            grid = QGridLayout()
+            grid.addWidget(m_state_label, 0, 0)
+            grid.addWidget(m_state_line_edit, 0, 1)
+            grid.addWidget(p_state_label, 1, 0)
+            grid.addWidget(p_state_line_edit, 1, 1)
+            grid.addWidget(day_rate_label, 2, 0)
+            grid.addWidget(day_rate_line_edit, 2, 1)
 
-        main_v_box = QVBoxLayout()
-        main_v_box.addWidget(today_label)
-        main_v_box.addLayout(grid)
-        main_v_box.addWidget(change_list_widget)
-        main_v_box.addWidget(day_note)
-        main_v_box.addWidget(ok_button)
-        self.setLayout(main_v_box)
-        self.show()
+            main_v_box = QVBoxLayout()
+            main_v_box.addWidget(today_label)
+            main_v_box.addLayout(grid)
+            main_v_box.addWidget(change_list_widget)
+            main_v_box.addWidget(day_note)
+            main_v_box.addWidget(ok_button)
+            self.setLayout(main_v_box)
+            self.show()
+        else:
+            QMessageBox.warning(self, "Form is already filled", "Form is already filled")
 
     def save_day_data(self):
         day_stats = [item.text() for item in self.day_stats_edits if item.text() != ""]
 
-        #if len(day_stats) == 3:
-        #    DataManager.saveMainData("day", [self.date] + day_stats + [None, None, None])
-        if self.line_edit_dict:
-            for goal_id in self.line_edit_dict.keys():
-                needs_calc = False
-                for edit in self.line_edit_dict[goal_id]:
-                    if edit.text():
-                        needs_calc = True
-                
+        if len(day_stats) == 3:
+            DataManager.saveMainData("day", [self.date] + day_stats + [None, None, None])
+            for goal_id in self.records_dict.keys():
+                if len(goal_id.split(".")) > 1:
+                    needs_calc = False
                     cc_stats_str = ""
                     goal_data = DataManager.loadMainData("goal", goal_id)
 
                     value, p_charact = goal_data[10].split(":")
+                    goal_cc_stats = goal_data[12]
                     value = float(value)
 
                     if p_charact == "Hours":
                         value += self.records_dict[goal_id] / 3600000
+
                     print(f"value:{value}")
+                    if goal_id in self.line_edit_dict:
+                        for edit in self.line_edit_dict[goal_id]:
+                            if edit.text():
+                                needs_calc = True
 
-                    goal_cc_stats = goal_data[12]
-                    if needs_calc:
-                        print(f"goal_cc_stats:{goal_cc_stats}")
-                        for stat in goal_cc_stats.split("|"):
-                            cc_name, stats = stat.split(":")
+                        if needs_calc:
+                            for stat in goal_cc_stats.split("|"):
+                                cc_name, stats = stat.split(":")
 
-                            if cc_name in self.goal_ccs_dict[goal_id]:
-                                index = self.goal_ccs_dict[goal_id].index(cc_name)
-                                cc_stats_str += f"{cc_name}:{stats},{self.date} {self.line_edit_dict[goal_id][index].text()}|"
-                            else:
-                                cc_stats_str += stat
-                            if cc_name == p_charact:
-                                value += float(self.line_edit_dict[goal_id][index].text())
+                                if cc_name in self.goal_ccs_dict[goal_id]:
+                                    index = self.goal_ccs_dict[goal_id].index(cc_name)
+                                    cc_stats_str += f"{cc_name}:{stats},{self.date} {self.line_edit_dict[goal_id][index].text()}|"
+                                else:
+                                    cc_stats_str += stat
+                                if cc_name == p_charact:
+                                    value += float(self.line_edit_dict[goal_id][index].text())
                             cc_stats_str = cc_stats_str.rstrip("|")
-                    else:
-                        cc_stats_str = goal_cc_stats
+                        else:
+                            cc_stats_str = goal_cc_stats
 
                     DataManager.updateMainData("goal_characts", [cc_stats_str, f"{value}:{p_charact}", goal_id])
                     if len(goal_id.split(".")) > 2:
@@ -1226,6 +1256,11 @@ class Form(QDialog):
                             supergoal_id = ".".join(layers[:-1])
                             layers.pop(-1)
                     print(f"cc_stats_str:{cc_stats_str}")
+            parser = configparser.ConfigParser()
+            parser.read(user_config_path)
+            parser.set("Data", "FormFillingDate", QDate().currentDate().toString("yyyy-MM-dd"))
+            with open(user_config_path, "w") as config_file:
+                parser.write(config_file)
             self.close()
         else: 
             QMessageBox.warning(self, "Fill all cells to save the form", "Fill all cells to save the form")

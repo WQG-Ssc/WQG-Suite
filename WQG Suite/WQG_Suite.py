@@ -1,7 +1,7 @@
 # -*- coding: cp1251 -*-
 import os, sys, configparser, subprocess, DataManager
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression
+from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
 from style_sheet import style_sheet
 import WSwidgets as ws
@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
     def initializeUI(self):
         self.setWindowTitle("WQG's Suite")
         self.setWindowIcon(QIcon("Files\Icon.png"))
+        self.FormFillingDate = ""
         self.anyChangesMade = False
         self.isGoalListNeedsToBeUpdated = False
         self.showAnimation()
@@ -71,7 +72,6 @@ class MainWindow(QMainWindow):
         self.authorize()
         
     def authorize(self):
-        
         if os.path.exists(user_config_path):
             config = configparser.ConfigParser()
             config.read(user_config_path)
@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
             self.user_name = config.get("User", "Name")
             self.user_password = config.get("User", "Password")
             self.user_image = QPixmap(r"Files/icons/User/Profile_picture.png")
+            self.FormFillingDate = config.get("Data", "FormFillingDate")
 
             self.main_menu()
 
@@ -157,6 +158,7 @@ class MainWindow(QMainWindow):
         config.add_section("User")
         config.set("User", "Name", self.user_name)
         config.set("User", "Password", self.user_password)
+        config.set("Data", "FormFillingDate", "")
 
         with open(user_config_path, "w") as config_file:
             config.write(config_file)
@@ -356,7 +358,7 @@ class MainWindow(QMainWindow):
         self.next_window()
 
     def form(self):
-        self.form = wstabs.Form()
+        self.form = wstabs.Form(self.FormFillingDate)
 
     def goalListUpdate(self):
         self.isGoalListNeedsToBeUpdated = True

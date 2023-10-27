@@ -188,14 +188,14 @@ class GoalBranch(QWidget):
 
         action = menu.exec(self.mapToGlobal(event.pos()))
 
-def getGoalImage(image_path, goal_progress, d_diff):
+def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
     if goal_progress > 100:
         goal_progress = 100
-    image = QPixmap(image_path).scaled(75, 75, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+    image = QPixmap(image_path).scaled(diameter, diameter, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
     size = image.size()
-    if size.height() > 75 or size.width() > 75:
-        image = image.copy(size.width() // 2 - 36.5, size.height() // 2 - 36.5, 75, 75)
-    mask = QBitmap(75, 75)
+    if size.height() > diameter or size.width() > diameter:
+        image = image.copy(size.width() // 2 - (diameter / 2), size.height() // 2 - (diameter / 2), diameter, diameter)
+    mask = QBitmap(diameter, diameter)
     mask.fill(Qt.GlobalColor.color0)
     painter = QPainter(mask)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -205,14 +205,20 @@ def getGoalImage(image_path, goal_progress, d_diff):
 
     image.setMask(mask)
 
-    template = QPixmap(r"Files\Icons\template.png")
+    if diameter == 150:
+        template = QPixmap(r"Files\Icons\big template.png")
+    else:
+        template = QPixmap(r"Files\Icons\template.png")
 
     painter.begin(template)
-    painter.drawPixmap(12, 12, image)
+    if diameter == 150:
+        painter.drawPixmap(0, 0, image)
+    else:
+        painter.drawPixmap(12, 12, image)
 
     painter.setPen(QPen(QColor(getGoalColor(d_diff)), 3, Qt.PenStyle.SolidLine))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    rect = QRectF(2.0, 2.0, 95.0, 95.0)
+    rect = QRectF(2.0, 2.0, diameter + 20, diameter + 20)
     painter.drawArc(rect, 90 * 16, goal_progress * -3.6 * 16)
     painter.end()
 
@@ -868,6 +874,44 @@ class SkillCharactWidget(QWidget):
         self.value_edit.setReadOnly(True)
         if self.data_type == "Skills":
             self.delete_button.setDisabled(True)
+
+class CompleteGoalWindow(QWidget):
+    def __init__(self, parent, image_path, progress, d_diff):
+        super().__init__()
+        self.setParent(parent)
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(1920, 1040)
+        self.painter = QPainter()
+        goal_image = QLabel()
+        goal_image.setPixmap(getGoalImage(image_path, progress, int(d_diff), 150))
+        goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        time_label = QLabel(f"Time: {d_diff} hours")
+        time_label.setFont(QFont("Calibri", 24, 700))
+        time_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        ok_button = QPushButton()
+        ok_button.setIcon(QIcon(f"Files\icons\complete goal.png"))
+        ok_button.clicked.connect(self.complete_goal)
+        ok_button.setFixedWidth(150)
+        v_box = QVBoxLayout()
+        v_box.addSpacing(345)
+        v_box.addWidget(goal_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addStretch()
+
+        self.setLayout(v_box)
+        self.show()
+
+    def complete_goal(self):
+        self.close()
+        
+    def paintEvent(self, event):
+        self.painter.begin(self)
+        brush = QBrush(QColor(0, 0, 0, 127))
+        self.painter.setBrush(brush)
+        self.painter.drawRect(0, 0, 1920, 1040)
+        self.painter.end()
 
 def getGoalColor(d_diff):
     previous_key = -1

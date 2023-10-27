@@ -7,12 +7,11 @@ other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-        #try: 
-        #    return func(*args, **kwargs)
-        #except Exception as error:
-        #    print(f'An error occurred in {func.__name__}: {error}')
-        #    return False
+        try: 
+            return func(*args, **kwargs)
+        except Exception as error:
+            print(f'An error occurred in {func.__name__}: {error}')
+            return False
     return wrapper
 
 @exception_handler
@@ -202,9 +201,11 @@ def recalculateValues(layer):
                 for charact in cc_stats_dict.keys():
                     records = ""
                     for date in cc_stats_dict[charact].keys():
-                        records += f"{date} {cc_stats_dict[charact][date]}"
+                        records += f"{date} {cc_stats_dict[charact][date]},"
                     if not records:
                         records = QDate.currentDate().toString('yyyy-MM-dd') + " 0"
+                    else:
+                        records = records.rstrip(",")
                     cc_stats += f"{charact}:{records}|"
                 cc_stats = cc_stats.rstrip("|")
     else:
@@ -255,13 +256,15 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Branches WHERE RowID == ?", args)
         cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
     if data_type == "goal":
+        cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
         if args[1]:
-            cur.execute(f"DELETE FROM Goals WHERE ID == '{args[0]}'")
             cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
-        else:
-            cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
     if data_type == "characteristic":
         cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
+    if data_type == "statistics":
+        cur.execute("DELETE FROM Main_statistics WHERE task_ID == ?", (args[0],))
+        if args[1]:
+            cur.execute(f"DELETE FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
     conn.commit()
     conn.close()
 
