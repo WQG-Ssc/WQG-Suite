@@ -270,6 +270,7 @@ class MainWindow(QMainWindow):
         obj_manager_button = QPushButton()
         obj_manager_button.setIcon(QIcon(i_dir + r"\search.png"))
         obj_manager_button.clicked.connect(self.open_obj_manager)
+        obj_manager_button.setShortcut('F3')
         finish_day_button = QPushButton()
         finish_day_button.setIcon(QIcon(i_dir + r"\finish day.png"))
         finish_day_button.clicked.connect(self.form)
@@ -300,8 +301,33 @@ class MainWindow(QMainWindow):
         self.dialog.setMinimumSize(line_edit.sizeHint().width(), line_edit.sizeHint().height() + 200)
         
         obj_manager = ws.ObjectManager(self.dialog, line_edit)
+        obj_manager.selected.connect(self.show_object)
         obj_manager.setStyleSheet("background-color: #000000")
         self.dialog.show()
+
+    def show_object(self, text, goal_id, obj_type):
+        if obj_type == "Goals":
+            tab = wstabs.GoalTab(goal_id.split(".")[0], goal_id=goal_id)
+            tab.changesMade.connect(self.changesMade)
+            tab.changesSaved.connect(self.changesSaved)
+            tab.previous_window_req.connect(self.previous_window)
+
+        if obj_type == "Branches":
+            self.current_branch_id = DataManager.loadMainData("branch_id", text)[0]
+            tab = wstabs.GoalsTab(self.current_branch_id)
+            tab.tree_widget.itemClicked.connect(self.goal_window)
+            tab.add_button.clicked.connect(self.goal_window)
+            tab.sectionMoved.connect(self.changesMade)
+
+            self.stacked_widget.addWidget(tab)
+            self.next_window()
+
+        if obj_type == "Skills":
+            tab = wstabs.ProfileTab(self.user_image, self.user_info)
+
+        self.stacked_widget.addWidget(tab)
+        self.next_window()
+        self.dialog.close()
 
     def toggle_toolbar(self):
         if self.tool_bar.isVisible():
@@ -311,9 +337,10 @@ class MainWindow(QMainWindow):
 
     def settings(self):
         self.dialog = QDialog()
-        about_button = QPushButton("About")
+        stat_edit_button = QPushButton("Edit statistics")
+        stat_edit_button.clicked.connect(self.statistics_editor)
         v_box = QVBoxLayout()
-        v_box.addWidget(about_button)
+        v_box.addWidget(stat_edit_button)
         self.dialog.setLayout(v_box)
         self.dialog.show()
 
@@ -324,6 +351,9 @@ class MainWindow(QMainWindow):
         v_box.addWidget(label)
         self.dialog.setLayout(v_box)
         self.dialog.show()
+
+    def statistics_editor(self):
+        self.dialog = wstabs.StatisticsEditor()
 
     def statistics_window(self):
         stats_tab = wstabs.StatisticsTab()

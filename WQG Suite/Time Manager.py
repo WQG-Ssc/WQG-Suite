@@ -481,6 +481,11 @@ class MainWindow(QMainWindow):
         if self.object_manager.isSelected:
             self.stop_button.setEnabled(True)
             if self.isPaused:
+                if len(self.task_ID.split(".")) > 1:
+                    layers = self.task_ID.split(".")
+                    while len(layers) > 1:
+                        DataManager.updateMainData("goal_state", ["completing", ".".join(layers)])
+                        layers.pop(-1)
                 self.isRecordStarted = True
                 self.isPaused = False
                 self.toggle_button.setIcon(QIcon(r"Files\Icons\pause.png"))

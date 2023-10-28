@@ -24,7 +24,7 @@ class Goal(QObject):
             self.isGoalExists = True
         #ID, name, time, benefit, limit_date, priority, used_skills (,), state, note, files (,), progress (,), custom_characteristics (,:), is_group, showing_in_list
         else:
-            self.goal_data = ["", "", "", "", "", "", "", "", "", r"Files\icons\Add an image....png", "", "", "", "", ""]
+            self.goal_data = ["", "", 0, "", "", "", "", "creating", "", r"Files\icons\Add an image....png", "", "", "", "", ""]
             
     def displayData(self):
         #cell_list: 1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7 - isgroup, 8-12 - characts lineEdits
@@ -38,6 +38,7 @@ class Goal(QObject):
         images_list = self.goal_data[9].split(",")
         self.cell_list[0].setImage(images_list[0])
         self.cell_list[2].setImagesList(images_list)
+        self.cell_list[5].setText("State: " + self.goal_data[7])
         self.cell_list[6].blockSignals(True)
         self.cell_list[6].setChecked(isGroup)
         self.cell_list[6].setDisabled(self.isGoalExists)
@@ -62,7 +63,10 @@ class Goal(QObject):
         else:
             characts_edits[0].setReadOnly(False)
         for i in range(4):
-            characts_edits[i].setText(str(standard_characts_values[i]))
+            if i == 0:
+                characts_edits[i].setText(str(round(float(standard_characts_values[i]), 2)))
+            else:
+                characts_edits[i].setText(str(standard_characts_values[i]))
 
         #ќтобразим значени€ пользовательских и навыки
         characts_list_widget = self.list_widget_list[1]

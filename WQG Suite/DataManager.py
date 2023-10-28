@@ -37,6 +37,12 @@ def loadMainData(data_type, *args):
         conn.close()
         return branch_name
 
+    if data_type == "branch_id":
+        cur.execute("SELECT RowID FROM Branches WHERE name == ?", args)
+        branch_id = cur.fetchone()
+        conn.close()
+        return branch_id
+
     if data_type == "skills":
         cur.execute("SELECT * FROM Skills")
 
@@ -105,6 +111,9 @@ def saveMainData(data_type, args):
         
     if data_type == "day":
         cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time', 'Shedule completing', 'Shedule completing accuracy') VALUES (?, ?, ?, ?, ?, ?, ?)", args)
+
+    if data_type == "statistics":
+        cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", args)
 
     conn.commit()
     conn.close()
@@ -245,6 +254,13 @@ def updateMainData(data_type, args):
         cur.execute("UPDATE Goals SET cc_stats = ?, progress = ? WHERE ID == ?", args)
     if data_type == "progress":
         cur.execute("UPDATE Goals SET progress = ? WHERE ID == ?", args)
+    if data_type == "goal_characts_stats":
+        print(f"args:{args}")
+        cur.execute("UPDATE Goals SET cc_stats = ? WHERE ID == ?", args)
+    if data_type == "goal_state":
+        cur.execute("UPDATE Goals SET state = ? WHERE ID == ?", args)
+    if data_type == "day_data":
+        cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ? WHERE date == ?", args)
     conn.commit()
     conn.close()
 

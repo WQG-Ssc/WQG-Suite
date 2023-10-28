@@ -205,20 +205,22 @@ def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
 
     image.setMask(mask)
 
-    if diameter == 150:
+    if diameter > 75:
         template = QPixmap(r"Files\Icons\big template.png")
+        offset = 13
+        offset2 = 22
     else:
+        offset = 12
+        offset2 = 20
         template = QPixmap(r"Files\Icons\template.png")
 
     painter.begin(template)
-    if diameter == 150:
-        painter.drawPixmap(0, 0, image)
-    else:
-        painter.drawPixmap(12, 12, image)
+
+    painter.drawPixmap(offset, offset, image)
 
     painter.setPen(QPen(QColor(getGoalColor(d_diff)), 3, Qt.PenStyle.SolidLine))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    rect = QRectF(2.0, 2.0, diameter + 20, diameter + 20)
+    rect = QRectF(2.0, 2.0, diameter + offset2, diameter + offset2)
     painter.drawArc(rect, 90 * 16, goal_progress * -3.6 * 16)
     painter.end()
 
@@ -730,7 +732,7 @@ class GraphItem(QWidget):
 
 class ObjectManager(QWidget):
     selected = pyqtSignal(str, str, str)
-    def __init__(self, parent, line_edit, init_s_filter=["Goals", "Branches", "Skills", "Characteristics", "Graphs"], searching=False):
+    def __init__(self, parent, line_edit, init_s_filter=["Goals", "Branches", "Skills"], searching=False):
         super().__init__()
         self.s_filter = [item for item in init_s_filter]
 
@@ -876,34 +878,102 @@ class SkillCharactWidget(QWidget):
             self.delete_button.setDisabled(True)
 
 class CompleteGoalWindow(QWidget):
-    def __init__(self, parent, image_path, progress, d_diff):
+    completed = pyqtSignal()
+    def __init__(self, parent, goal_id):
         super().__init__()
         self.setParent(parent)
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(1920, 1040)
         self.painter = QPainter()
-        goal_image = QLabel()
-        goal_image.setPixmap(getGoalImage(image_path, progress, int(d_diff), 150))
-        goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        time_label = QLabel(f"Time: {d_diff} hours")
-        time_label.setFont(QFont("Calibri", 24, 700))
-        time_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        ok_button = QPushButton()
-        ok_button.setIcon(QIcon(f"Files\icons\complete goal.png"))
-        ok_button.clicked.connect(self.complete_goal)
-        ok_button.setFixedWidth(150)
-        v_box = QVBoxLayout()
-        v_box.addSpacing(345)
-        v_box.addWidget(goal_image, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_box.addStretch()
 
-        self.setLayout(v_box)
-        self.show()
+        self.goal_data = DataManager.loadMainData("goal", goal_id)
+
+        if self.goal_data[7] != "completing":
+            QMessageBox.warning(self, "Goal haven't been started yet", "Start completing the goal to be able to complete it")
+        else:
+            self.recalc_goal_values_for_comp()
+            goal_image = QLabel()
+            goal_image.setPixmap(getGoalImage(self.goal_data[9].split(",")[0], calculate_progress(self.goal_data[10], self.goal_data[2], self.goal_data[11]), float(self.goal_data[2]), 138))
+            goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+            name_label = QLabel(self.goal_data[1])
+            name_label.setFont(QFont("Calibri", 24, 700))
+            name_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+            time_label = QLabel(f"Time: {self.goal_data[2]:2f} hours")
+            time_label.setFont(QFont("Calibri", 24, 700))
+            time_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+            ok_button = QPushButton()
+            ok_button.setIcon(QIcon(f"Files\icons\complete goal.png"))
+            ok_button.clicked.connect(self.complete_goal)
+            ok_button.setFixedWidth(150)
+
+            v_box = QVBoxLayout()
+            v_box.addSpacing(345)
+            v_box.addWidget(goal_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+            v_box.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+            v_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+            v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+            v_box.addStretch()
+
+            self.setLayout(v_box)
+            self.show()
+
+    def recalc_goal_values_for_comp(self, goal_id=""):
+        if goal_id:
+            goal_data = DataManager.loadMainData("goal", goal_id)
+        else:
+            goal_data = self.goal_data
+        progress, p_charact = goal_data[10].split(":")
+        time = 0
+        if p_charact == "Hours":
+            time = float(progress)
+        else:
+            stats = DataManager.loadMainData("statistics", goal_data[0])
+            if goal_data[13]:
+                stats += DataManager.loadMainData("group_statistics", goal_data[0])
+                DataManager.loadMainData("group_statistics", goal_data[0])
+            if stats:
+                for stat in stats:
+                    start_time = calculate_msecs(stat[0])
+                    end_time = calculate_msecs(stat[1])
+                    record_time = end_time - start_time
+                    time += record_time
+                time /= 3600000
+
+        if goal_data[12]:
+            characts_str = ""
+            characts_dict = {charact.split(":")[0]:sum([float(stat.split(" ")[1]) for stat in charact.split(":")[1].split(",")]) for charact in self.goal_data[12].split("|")}
+        
+            for charact in goal_data[11].split(","):
+                name, value = charact.split(":")
+                if name in characts_dict:
+                    characts_str += f"{name}:{characts_dict[name]}"
+                else:
+                    characts_str += name + ":" + value
+            goal_data[11] = characts_str
+        goal_data[2] = time
+        goal_data[7] = "completed"
+        goal_data.append(goal_data[0])
+
+        if goal_id:
+            DataManager.updateMainData("goal", goal_data)
+        else:
+            self.goal_data = goal_data
+        print(goal_data)
 
     def complete_goal(self):
+        if self.goal_data[13]:
+            goal_tree = DataManager.getGoalTree(self.goal_data[0])
+            for goal in goal_tree:
+                if goal[0] != self.goal_data[0]:
+                    self.recalc_goal_values_for_comp(goal[0])
+
+        print(self.goal_data)
+        DataManager.updateMainData("goal", self.goal_data)
+        self.completed.emit()
         self.close()
         
     def paintEvent(self, event):
@@ -954,6 +1024,13 @@ def calculate_msecs(interval_str):
     time_list = interval_str.split(":")
     return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000
 
+def to_str(self, msecs):
+    secs = msecs // 1000
+    m, s = divmod(secs, 60)
+    h, m = divmod(m, 60)
+
+    return f'{h:d}:{m:02d}:{s:02d}'
+
 def calculate_progress(progress, time, characts):
     progress, p_charact = progress.split(":")
     if progress != "0":
@@ -963,4 +1040,6 @@ def calculate_progress(progress, time, characts):
             percents = float(progress) / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on max value from goal's custom characts
     else:
         percents = 0
-    return percents
+    if percents > 100:
+        percents = 100.0
+    return round(percents, 2)
