@@ -250,7 +250,7 @@ class dDiffIndicator(QLabel):
         self.setPixmap(self.template)
 
 class GoalProgressBar(QProgressBar):
-    def __init__(self, d_diff, goal_progress, isMain):
+    def __init__(self, d_diff, goal_progress, isMain, state):
         super().__init__()
         if goal_progress > 100:
             self.goal_progress = 100
@@ -265,11 +265,16 @@ class GoalProgressBar(QProgressBar):
             self.setFixedSize(14, 85)
         else:
             self.setFixedSize(14, 65)
+
+        if state == "completed":
+            self.border_color = "#FFD300"
+        else:
+            self.border_color = "#FFFFFF"
         self.setUpProgressBar()
 
     def setUpProgressBar(self):
         color = getGoalColor(int(self.d_diff))
-        self.setStyleSheet("QProgressBar::chunk{background-color:" + color + "}")
+        self.setStyleSheet("QProgressBar::chunk{background-color:" + color + "}QProgressBar{border-color:" + self.border_color + "}")
         self.setValue(self.goal_progress)
 
     def updateGoalProgressBar(self, goal_progress, d_diff):
@@ -464,7 +469,7 @@ class AddtionalImagesWindow(QWidget):
 class GoalTreeItem(QWidget):
     subgoalAdded = pyqtSignal(str)
     goalDeleted = pyqtSignal(str)
-    def __init__(self, goal_id, goal_name, d_diff, goal_progress, isMain, isGroup):
+    def __init__(self, goal_id, goal_name, d_diff, goal_progress, isMain, isGroup, state):
         super().__init__()
         self.goal_id = goal_id
         self.goal_name = goal_name
@@ -472,6 +477,7 @@ class GoalTreeItem(QWidget):
         self.goal_progress = goal_progress
         self.isMain = isMain
         self.isGroup = isGroup
+        self.state = state
         self.arrangeWidgets()
         self.add_act = QAction("Add subgoal")
         self.add_act.triggered.connect(self.add_subgoal)
@@ -481,7 +487,7 @@ class GoalTreeItem(QWidget):
     def arrangeWidgets(self):
         self.label = QLabel(self.goal_id + " " + self.goal_name)
         self.label.setFont(QFont("Calibri", 30))
-        self.icon = GoalProgressBar(self.d_diff, self.goal_progress, self.isMain)
+        self.icon = GoalProgressBar(self.d_diff, self.goal_progress, self.isMain, self.state)
 
         h_box = QHBoxLayout()
         h_box.addWidget(self.label)
@@ -521,13 +527,13 @@ class DateEditTool(QWidget):
 
         self.date_edit = QDateEdit(self.date)
         self.date_edit.userDateChanged.connect(self.change_selected_date)
-        calendar_button = QPushButton()
-        calendar_button.setIcon(QIcon(r"Files\icons\calendar.png"))
-        calendar_button.setFixedSize(18, 18)
-        calendar_button.clicked.connect(self.show_calendar)
+        self.calendar_button = QPushButton()
+        self.calendar_button.setIcon(QIcon(r"Files\icons\calendar.png"))
+        self.calendar_button.setFixedSize(18, 18)
+        self.calendar_button.clicked.connect(self.show_calendar)
         h_box = QHBoxLayout()
         h_box.addWidget(self.date_edit)
-        h_box.addWidget(calendar_button)
+        h_box.addWidget(self.calendar_button)
         self.setLayout(h_box)
 
     def show_calendar(self):
@@ -544,6 +550,7 @@ class DateEditTool(QWidget):
 
     def close_calendar(self, date):
         self.dialog.close()
+        print(f"553:{date}")
         self.date_edit.setDate(date)
         self.date = date
 
@@ -552,10 +559,10 @@ class DateEditTool(QWidget):
         self.dateChanged.emit()
 
     def text(self):
-        return self.date.toString("dd/MM/yyyy")
+        return self.date.toString("yyyy-MM-dd")
 
     def setText(self, date: str):
-        date = QDate.fromString(date, "dd/MM/yyyy")
+        date = QDate.fromString(date, "yyyy-MM-dd")
         if date:
             self.date = date
             self.date_edit.blockSignals(True)
@@ -563,6 +570,10 @@ class DateEditTool(QWidget):
             self.date_edit.blockSignals(False)
         else:
             date = self.current_date
+
+    def setEnabled(self, val):
+        self.date_edit.setEnabled(val)
+        self.calendar_button.setEnabled(val)
 
 class SkillWidget(QWidget):
     def __init__(self, skill_name, skill_progress):
@@ -574,6 +585,7 @@ class PlotlyViewer(QWebEngineView):
     def __init__(self, fig=None):
         super().__init__()
         self.page().profile().downloadRequested.connect(self.on_downloadRequested)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
  
         self.temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False)
         self.set_figure(fig)
@@ -611,6 +623,9 @@ class GraphItem(QWidget):
         self.graph_type = graph_type
         self.value_mode = "Per day"
         self.showing_charact = "h"
+        self.cc_stats_dict = {}
+        self.x = []
+        self.y = []
         self.show_checkbox = QCheckBox(self.name)
         self.show_checkbox.stateChanged.connect(self.graph_toggled)
         h_box = QHBoxLayout()
@@ -631,10 +646,9 @@ class GraphItem(QWidget):
             remove_graph.setObjectName("Tool")
 
             if self.graph_type == "Goals":
-                cc_stats, self.isGroup = DataManager.loadMainData("goal_custom", self.goal_id)# cc: date value, date value,|
+                cc_stats, self.isGroup = DataManager.loadMainData("goal_custom", self.goal_id, one=True)# cc: date value, date value,|
                 if cc_stats:
                     cc_stats = cc_stats.split("|")
-                    self.cc_stats_dict = {}
                     for cc in cc_stats:
                         cc = cc.split(":")
                         self.cc_stats_dict[cc[0]] = cc[1].split(",")
@@ -646,6 +660,10 @@ class GraphItem(QWidget):
                     self.sct_state = 1
                     h_box.addWidget(self.showing_charact_switcher)
                 self.value_type = "Numeric"
+
+            if self.graph_type == "Skills": 
+                self.value_type = "Numeric"
+                print(self.value_type)
             
             h_box.addWidget(remove_graph)
         h_box.setContentsMargins(10, 0, 0, 0)
@@ -656,44 +674,17 @@ class GraphItem(QWidget):
         if state == 1:
             self.toggled.emit(self.name, "", [], [], state, color)
         else:
-            self.x = []
-            self.y = []
             if self.graph_type == "Goals":
                 if self.showing_charact == "h":
-                    stat = DataManager.loadMainData("statistics", self.goal_id)
-                    if self.isGroup:
-                        stat += DataManager.loadMainData("group_statistics", self.goal_id)
-                    previous_date = ""
-                    for s in stat:
-                        start_time = calculate_msecs(s[0])
-                        end_time = calculate_msecs(s[1])
-                        record_time = end_time - start_time
-                        record_time /= 3600000
-                        date = s[2]
-                        if date not in self.x:
-                            self.x.append(date)
-                        if date == previous_date:
-                            self.y[-1] += record_time
-                        else:
-                            self.y.append(record_time)
-                        previous_date = date
+                    self.x, self.y = self.get_vals_for_h()
                 else:
-                    stat = self.cc_stats_dict[self.showing_charact]
-                    for s in stat:
-                        s = s.split(" ")
-                        self.x.append(s[0])
-                        self.y.append(s[1])
+                    self.x, self.y = self.get_vals_for_charact()
             elif self.graph_type == "Skills":
-                stat = DataManager.loadMainData("skill_stat", self.name)
-                for s in stat:
-                    self.x.append(s[0])
-                    self.y.append(s[1])
+                self.x, self.y = self.get_skill_vals()
+
             elif self.graph_type == "standard":
-                stat = DataManager.loadMainData("day_stats", self.name)
-                for s in stat:
-                    self.x.append(s[0])
-                    self.y.append(s[1])
-                color = DataManager.loadMainData("graph_color", self.name)[0]
+                self.x, self.y = self.get_graph_vals()
+                color = DataManager.loadMainData("graph_color", self.name, one=True)[0]
             if self.value_mode == "All time":
                 counter = 0
                 y = []
@@ -703,6 +694,60 @@ class GraphItem(QWidget):
                 self.y = [item for item in y]
 
             self.toggled.emit(self.name, self.value_type, self.x, self.y, state, color)
+
+    def get_graph_vals(self):
+        x = []
+        y = []
+        stat = DataManager.loadMainData("days_data", self.name)
+        for s in stat:
+            x.append(s[0])
+            y.append(s[1])
+        return x, y
+
+    def get_skill_vals(self):
+        x = []
+        y = []
+        stat = DataManager.loadMainData("skill_stat", self.name)
+        for s in stat:
+            date, time = s
+            if date in x:
+                y[-1] += time
+            else:
+                x.append(date)
+                y.append(time)
+        return x, y
+
+    def get_vals_for_h(self):
+        x = []
+        y = []
+        stat = DataManager.loadMainData("statistics", self.goal_id)
+        if self.isGroup:
+            stat += DataManager.loadMainData("group_statistics", self.goal_id)
+        previous_date = ""
+        for s in stat:
+            start_time = calculate_msecs(s[0])
+            end_time = calculate_msecs(s[1])
+            record_time = end_time - start_time
+            record_time /= 3600000
+            date = s[2]
+            if date not in x:
+                x.append(date)
+            if date == previous_date:
+                y[-1] += record_time
+            else:
+                y.append(record_time)
+            previous_date = date
+        return x, y
+
+    def get_vals_for_charact(self):
+        x = []
+        y = []
+        stat = self.cc_stats_dict[self.showing_charact]
+        for s in stat:
+            s = s.split(" ")
+            x.append(s[0])
+            y.append(s[1])
+        return x, y
 
     def switch_val_mode(self, state):
         if state:
@@ -729,6 +774,9 @@ class GraphItem(QWidget):
         if self.show_checkbox.isChecked():
             self.graph_toggled(1)
             self.graph_toggled(2)
+
+    def getGraphData(self):
+        return self.name, self.graph_type, self.value_type, self.cc_stats_dict
 
 class ObjectManager(QWidget):
     selected = pyqtSignal(str, str, str)
@@ -887,7 +935,7 @@ class CompleteGoalWindow(QWidget):
         self.setFixedSize(1920, 1040)
         self.painter = QPainter()
 
-        self.goal_data = DataManager.loadMainData("goal", goal_id)
+        self.goal_data = list(DataManager.loadMainData("goal", goal_id, one=True))
 
         if self.goal_data[7] != "completing":
             QMessageBox.warning(self, "Goal haven't been started yet", "Start completing the goal to be able to complete it")
@@ -923,9 +971,11 @@ class CompleteGoalWindow(QWidget):
 
     def recalc_goal_values_for_comp(self, goal_id=""):
         if goal_id:
-            goal_data = DataManager.loadMainData("goal", goal_id)
+            goal_data = list(DataManager.loadMainData("goal", goal_id, one=True))
         else:
             goal_data = self.goal_data
+
+        old_time = goal_data[2]
         progress, p_charact = goal_data[10].split(":")
         time = 0
         if p_charact == "Hours":
@@ -950,10 +1000,21 @@ class CompleteGoalWindow(QWidget):
             for charact in goal_data[11].split(","):
                 name, value = charact.split(":")
                 if name in characts_dict:
-                    characts_str += f"{name}:{characts_dict[name]}"
+                    characts_str += f"{name}:{characts_dict[name]},"
                 else:
-                    characts_str += name + ":" + value
+                    characts_str += f"{name}:{value},"
+            characts_str = characts_str.rstrip(",")
             goal_data[11] = characts_str
+
+        used_skills = goal_data[6]
+        skills_str = ""
+        for skill in used_skills.split(","):
+            name, value = skill.split(":")
+            skill_time = time * (float(value) / old_time)
+            skills_str += f"{name}:{skill_time},"
+        skills_str = skills_str.rstrip(",")
+
+        goal_data[6] = skills_str
         goal_data[2] = time
         goal_data[7] = "completed"
         goal_data.append(goal_data[0])
@@ -1024,20 +1085,20 @@ def calculate_msecs(interval_str):
     time_list = interval_str.split(":")
     return (int(time_list[0]) * 3600 + int(time_list[1]) * 60 + int(time_list[2])) * 1000
 
-def to_str(self, msecs):
+def to_str(msecs):
     secs = msecs // 1000
     m, s = divmod(secs, 60)
     h, m = divmod(m, 60)
-
     return f'{h:d}:{m:02d}:{s:02d}'
 
-def calculate_progress(progress, time, characts):
+def calculate_progress(progress, time, characts):#Calculates progress of a goal when showing it in the goal window
     progress, p_charact = progress.split(":")
-    if progress != "0":
+    progress = float(progress)
+    if progress:
         if p_charact == "Hours":
-            percents = float(progress) / float(time) * 100
+            percents = progress / float(time) * 100
         else:
-            percents = float(progress) / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on max value from goal's custom characts
+            percents = progress / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on finish value of the charact
     else:
         percents = 0
     if percents > 100:

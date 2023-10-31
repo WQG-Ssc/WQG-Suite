@@ -31,7 +31,15 @@ class MainWindow(QMainWindow):
             cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
             cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT)")
-            cur.execute("CREATE TABLE Skills_statistics (date TEXT)")
+            cur.execute("CREATE TABLE Skills_statistics (date TEXT, task_ID TEXT)")
+
+            cur.execute("""INSERT INTO Graphs (name, value_type, color) VALUES ('Mental state', 'Letteric', '#FF0000'), 
+                        ('Physical state', 'Letteric', '#F44336'), 
+                        ('Work time', 'Numeric', '#FFD300'),
+                        ('Shedule completing', '%', '#143484'),
+                        ('Shedule completing accuracy', '%', '#009F65'),
+                        ('Day rating', 'Numeric', '00FFFF')""")
+
             conn.commit()
             conn.close()
         if not os.path.exists(other_db):
@@ -313,7 +321,7 @@ class MainWindow(QMainWindow):
             tab.previous_window_req.connect(self.previous_window)
 
         if obj_type == "Branches":
-            self.current_branch_id = DataManager.loadMainData("branch_id", text)[0]
+            self.current_branch_id = DataManager.loadMainData("branch_id", text, one=True)[0]
             tab = wstabs.GoalsTab(self.current_branch_id)
             tab.tree_widget.itemClicked.connect(self.goal_window)
             tab.add_button.clicked.connect(self.goal_window)

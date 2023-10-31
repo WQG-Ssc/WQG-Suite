@@ -59,9 +59,6 @@ QTreeWidget QHeaderView::section{
     color: #FFD300;
     background-color: #000000;
     }
-QTreeWidget::item{
-    height: 140px
-    }
 QGroupBox{
     border: none
     }

@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt6.QtGui import QIcon
 
 class Goal(QObject):
-    skillCharactChanged = pyqtSignal()
     def __init__(self, cell_list, list_widget_list, add_skill_or_charact, goal_id=None):
         super().__init__()
         self.goal_id = goal_id
@@ -20,7 +19,7 @@ class Goal(QObject):
 
     def loadData(self):
         if self.goal_id:
-            self.goal_data = DataManager.loadMainData("goal", self.goal_id)
+            self.goal_data = list(DataManager.loadMainData("goal", self.goal_id, one=True))
             self.isGoalExists = True
         #ID, name, time, benefit, limit_date, priority, used_skills (,), state, note, files (,), progress (,), custom_characteristics (,:), is_group, showing_in_list
         else:
@@ -90,6 +89,7 @@ class Goal(QObject):
         if used_skills:
             used_skills = used_skills.split(",")
             for obj in used_skills:
+                print(obj)
                 obj = obj.split(":")#[skill_name, value]
                 self.add_skill_or_charact(setting_mode=obj + [skills_list_widget, isGroup, "Skills"])
 

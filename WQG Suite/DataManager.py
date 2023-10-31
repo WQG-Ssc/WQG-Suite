@@ -7,15 +7,16 @@ other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        try: 
-            return func(*args, **kwargs)
-        except Exception as error:
-            print(f'An error occurred in {func.__name__}: {error}')
-            return False
+        return func(*args, **kwargs)
+        #try: 
+        #    return func(*args, **kwargs)
+        #except Exception as error:
+        #    print(f'An error occurred in {func.__name__}: {error}')
+        #    return False
     return wrapper
 
 @exception_handler
-def loadMainData(data_type, *args):
+def loadMainData(data_type, *args, one=False):
     conn = sql.connect(main_db)
     cur = conn.cursor()
 
@@ -27,68 +28,59 @@ def loadMainData(data_type, *args):
 
     if data_type == "goal":
         cur.execute("SELECT * FROM Goals WHERE ID == ?", args)
-        goal_data = cur.fetchone()
-        conn.close()
-        return list(goal_data)
 
     if data_type == "branch":
         cur.execute("SELECT name, custom_characteristics, sections_position FROM Branches WHERE RowID == ?", args)
-        branch_name = cur.fetchone()
-        conn.close()
-        return branch_name
 
     if data_type == "branch_id":
         cur.execute("SELECT RowID FROM Branches WHERE name == ?", args)
-        branch_id = cur.fetchone()
-        conn.close()
-        return branch_id
 
     if data_type == "skills":
         cur.execute("SELECT * FROM Skills")
 
-    if data_type == "day_stats":
+    if data_type == "days_data":
         cur.execute(f"SELECT date, [{args[0]}] FROM Days")
 
-    if data_type == "names":
-        if args[0] == "Goals":
-            cur.execute(f"SELECT name, ID FROM Goals")
-        else:
-            cur.execute(f"SELECT name FROM {args[0]}")
+    if data_type == "day_data":
+        cur.execute("SELECT [Mental state], [Physical state], [Day rate] FROM Days WHERE date == ?", args)
     
     if data_type == "graphs":
         cur.execute("SELECT * FROM Graphs")
 
     if data_type == "goal_custom":#Custom characteristics
         cur.execute("SELECT cc_stats, is_group FROM Goals WHERE ID == ?", args)
-        cc_stats = cur.fetchone()
-        conn.close()
-        return cc_stats
 
     if data_type == "characteristic":
         cur.execute("SELECT c_type, v_type FROM Characteristics WHERE name == ?", args)
-        charact = cur.fetchone()
-        conn.close()
-        return charact
 
     if data_type == "skill_stat":
-        cur.execute(f"SELECT date, [{args[0]}] FROM Skills_statistics WHERE '{args[0]}' IS NOT NULL")
+        cur.execute(f"SELECT date, [{args[0]}] FROM Skills_statistics WHERE [{args[0]}] IS NOT NULL")
 
     if data_type == "statistics":
         cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID == ?", args)
 
-    if data_type == "graph_color":
-        cur.execute("SELECT color FROM Graphs WHERE name == ?", args)
-        color = cur.fetchone()
-        conn.close()
-        return color
-
-    if data_type == "day_data":
+    if data_type == "day_stats":
         cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ?", args)
 
     if data_type == "group_statistics":
         cur.execute(f"SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
 
-    data = cur.fetchall()
+    if data_type == "graph_color":
+        cur.execute("SELECT color FROM Graphs WHERE name == ?", args)
+
+    if data_type == "names":
+        if args[0] == "Goals":
+            cur.execute(f"SELECT name, ID FROM Goals")
+        else:
+            cur.execute(f"SELECT name FROM {args[0]}")
+
+    if data_type == "get_goal_ids":
+        cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{args[0]}.%'")
+
+    if one:
+        data = cur.fetchone()
+    else:
+        data = cur.fetchall()
     conn.close()
     return data
 
@@ -103,8 +95,12 @@ def saveMainData(data_type, args):
         cur.execute("INSERT INTO Goals (ID, name, time, benefit, limit_date, priority, used_skills, state, note, files, progress, custom_characteristics, cc_stats, is_group, showing_in_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args)
 
     if data_type == "skill":
-        cur.execute(f"INSERT INTO Skills (name) VALUES ('{args}')")
+        cur.execute(f"INSERT INTO Skills (name, time) VALUES ('{args}', 0.0)")
         cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{args}' REAL")
+
+    if data_type == "skills_stats":
+        values = f"'{args[1]}','{args[3]}',{args[2]}"
+        cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {args[0]}) VALUES ({values})")
 
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
@@ -112,14 +108,86 @@ def saveMainData(data_type, args):
     if data_type == "day":
         cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time', 'Shedule completing', 'Shedule completing accuracy') VALUES (?, ?, ?, ?, ?, ?, ?)", args)
 
+    if data_type == "day_data":
+        cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', date) VALUES (?, ?, ?, ?)", args)
+
     if data_type == "statistics":
         cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", args)
 
     conn.commit()
     conn.close()
+    return True
 
 @exception_handler
-def recalculateValues(layer):
+def updateMainData(data_type, args):
+    conn = sql.connect(main_db)
+    cur = conn.cursor()
+    if data_type == "branch":
+        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
+
+    if data_type == "displaying_characts":
+        cur.execute("UPDATE Branches SET custom_characteristics = ?, sections_position = ? WHERE RowID == ?", args)
+
+    if data_type == "sections_pos":
+        cur.execute("UPDATE Branches SET sections_position = ? WHERE RowID == ?", args)
+
+    if data_type == "goal":
+        cur.execute("UPDATE Goals SET ID = ?, name = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ?, cc_stats = ?, is_group = ?, showing_in_list = ? WHERE ID == ?", args)
+
+    if data_type == "Characteristics":
+        cur.execute("UPDATE Characteristics SET name = ?, c_type = ?, v_type = ? WHERE name == ?", args)
+
+    if data_type == "goal_characts":
+        cur.execute("UPDATE Goals SET cc_stats = ?, progress = ? WHERE ID == ?", args)
+
+    if data_type == "progress":
+        cur.execute("UPDATE Goals SET progress = ? WHERE ID == ?", args)
+
+    if data_type == "goal_characts_stats":
+        cur.execute("UPDATE Goals SET cc_stats = ? WHERE ID == ?", args)
+
+    if data_type == "goal_state":
+        cur.execute("UPDATE Goals SET state = ? WHERE ID == ?", args)
+
+    if data_type == "day_data":
+        cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ? WHERE date == ?", args)
+
+    if data_type == "skill_value":
+        cur.execute(f"UPDATE Skills SET time = ? WHERE name == ?", args)
+
+    if data_type == "goal_id":
+        cur.execute("UPDATE Main_statistics SET task_ID = ? WHERE task_ID == ?", args)
+        cur.execute("UPDATE Skills_statistics SET task_ID = ? WHERE task_ID == ?", args)
+    conn.commit()
+    conn.close()
+    return True
+
+@exception_handler
+def deleteMainData(data_type, *args):
+    conn = sql.connect(main_db)
+    cur = conn.cursor()
+    if data_type == "branch":
+        cur.execute("DELETE FROM Branches WHERE RowID == ?", args)
+        cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
+    if data_type == "goal":
+        cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
+        if args[1]:
+            cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
+    if data_type == "characteristic":
+        cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
+    if data_type == "statistics":
+        cur.execute("DELETE FROM Main_statistics WHERE task_ID == ?", (args[0],))
+        if args[1]:
+            cur.execute(f"DELETE FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
+    if data_type == "skills_stats":
+        cur.execute("DELETE FROM Skills_statistics WHERE task_ID == ?", (args[0],))
+        if args[1]:
+            cur.execute(f"DELETE FROM Skills_statistics WHERE task_ID LIKE '{args[0]}.%'")
+    conn.commit()
+    conn.close()
+
+@exception_handler
+def recalculateValues(layer):#Recalculates values of time, dynamic characteristics and skills of groups, then calls recalculateProgress() method to recalculate progress of the group
     conn = sql.connect(main_db)
     cur = conn.cursor()
     supergoal_id = ".".join(layer[:-1])
@@ -134,7 +202,7 @@ def recalculateValues(layer):
         characts = characts.split(",")
         for charact in characts:
             charact, value = charact.split(":")
-            if loadMainData("characteristic", charact)[0] == "dynamic":
+            if loadMainData("characteristic", charact, one=True)[0] == "dynamic":
                 allCharacts[charact] = 0
                 charactsToRecalc.append(charact)
             else:
@@ -146,9 +214,7 @@ def recalculateValues(layer):
     ids = [item[0] for item in raw_ids]
     print(f"ids:{ids}")
     regex = re.compile(f"^{supergoal_id}\.[^.]+$")
-    layer_length = len([item for item in ids if regex.match(item)])
-
-    print(f"layer_length: {layer_length}")
+    layer_list = [item for item in ids if regex.match(item)]
 
     print(f"charactsToRecalc{charactsToRecalc}")
 
@@ -160,9 +226,9 @@ def recalculateValues(layer):
     ccs = ""
     cc_stats = ""
 
-    if layer_length:
-        for goal in range(1, layer_length + 1):
-            goal_id = ".".join(layer[:-1] + [str(goal)])
+    if layer_list:
+        for goal in layer_list:
+            goal_id = goal
             print(f"selected id:{goal_id}")
             if charactsToRecalc:
                 cur.execute("SELECT used_skills, time, custom_characteristics, cc_stats FROM Goals WHERE ID == ?", (goal_id,))
@@ -237,74 +303,17 @@ def recalculateValues(layer):
     recalculateProgress(supergoal_id, progress.split(":")[1], supergoal_cc_stats, True)
 
 @exception_handler
-def updateMainData(data_type, args):
-    conn = sql.connect(main_db)
-    cur = conn.cursor()
-    if data_type == "branch":
-        cur.execute("UPDATE Branches SET name = ? WHERE name == ?", args)
-    if data_type == "displaying_characts":
-        cur.execute("UPDATE Branches SET custom_characteristics = ?, sections_position = ? WHERE RowID == ?", args)
-    if data_type == "sections_pos":
-        cur.execute("UPDATE Branches SET sections_position = ? WHERE RowID == ?", args)
-    if data_type == "goal":
-        cur.execute("UPDATE Goals SET ID = ?, name = ?, time = ?, benefit = ?, limit_date = ?, priority = ?, used_skills = ?, state = ?, note = ?, files = ?, progress = ?, custom_characteristics = ?, cc_stats = ?, is_group = ?, showing_in_list = ? WHERE ID == ?", args)
-    if data_type == "Characteristics":
-        cur.execute("UPDATE Characteristics SET name = ?, c_type = ?, v_type = ? WHERE name == ?", args)
-    if data_type == "goal_characts":
-        cur.execute("UPDATE Goals SET cc_stats = ?, progress = ? WHERE ID == ?", args)
-    if data_type == "progress":
-        cur.execute("UPDATE Goals SET progress = ? WHERE ID == ?", args)
-    if data_type == "goal_characts_stats":
-        print(f"args:{args}")
-        cur.execute("UPDATE Goals SET cc_stats = ? WHERE ID == ?", args)
-    if data_type == "goal_state":
-        cur.execute("UPDATE Goals SET state = ? WHERE ID == ?", args)
-    if data_type == "day_data":
-        cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ? WHERE date == ?", args)
-    conn.commit()
-    conn.close()
-
-@exception_handler
-def deleteMainData(data_type, *args):
-    conn = sql.connect(main_db)
-    cur = conn.cursor()
-    if data_type == "branch":
-        cur.execute("DELETE FROM Branches WHERE RowID == ?", args)
-        cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
-    if data_type == "goal":
-        cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
-        if args[1]:
-            cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
-    if data_type == "characteristic":
-        cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
-    if data_type == "statistics":
-        cur.execute("DELETE FROM Main_statistics WHERE task_ID == ?", (args[0],))
-        if args[1]:
-            cur.execute(f"DELETE FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
-    conn.commit()
-    conn.close()
-
-@exception_handler
 def getGoalTree(goal_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
-    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group FROM Goals WHERE ID == '{goal_id}'")
+    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group, state FROM Goals WHERE ID == '{goal_id}'")
     goal_tree = cur.fetchall()
-    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group FROM Goals WHERE ID LIKE '{goal_id}.%' ORDER BY ID ASC")
+    cur.execute(f"SELECT ID, name, progress, time, custom_characteristics, is_group, state FROM Goals WHERE ID LIKE '{goal_id}.%' ORDER BY ID ASC")
     goal_tree += cur.fetchall()
     conn.close()
     return goal_tree
 
-@exception_handler
-def getGoalIDs(parent_id):
-    conn = sql.connect(main_db)
-    cur = conn.cursor()
-    cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{parent_id}.%'")
-    goal_tree = cur.fetchall()
-    conn.close()
-    return goal_tree
-
-def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=False):
+def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=False):#Recalculates progress of given goal
     if p_charact == "Hours":
         goal_time = 0
         records = loadMainData("statistics", goal_id)
@@ -315,11 +324,13 @@ def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=F
             end_time = ws.calculate_msecs(record[1])
             record_time = end_time - start_time
             goal_time += record_time
+        print(f"records:{records}")
+        print(goal_id, p_charact, cc_stats)
         goal_time /= 3600000
         progress_str = f"{goal_time}:Hours"
         print(f"goal_time:{goal_time}")
     else:
-        cc_stats = loadMainData("goal_custom", goal_id)[0]
+        cc_stats = loadMainData("goal_custom", goal_id, one=True)[0]
         charact_stats = [item.split(":")[1] for item in cc_stats.split("|") if item.split(":")[0] == p_charact][0]
         print(f"characts_stats:{charact_stats}")
         progress_str = str(sum([float(item.split(" ")[1]) for item in charact_stats.split(",")])) + ":" + p_charact
@@ -327,5 +338,31 @@ def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=F
         print(goal_id)
     if returning:
         return progress_str
+    updateMainData("progress", [progress_str, goal_id])
+
+def recalculateSkills():#Calculate values of all skills
+    skills = loadMainData("names", "Skills")
+
+    for skill in skills:
+        stats = loadMainData("skill_stat", skill[0])
+        skill_value = sum([item[1] for item in stats])
+        updateMainData("skill_value", [skill_value, skill[0]])
+
+def addSkillStat(task_id, task_time, date):
+    if len(task_id.split(".")) > 1:
+        skill_list = []
+        skills_values = []
+        goal_data = loadMainData("goal", task_id, one=True)
+        skills = goal_data[6]
+        goal_time = goal_data[2]
+        for skill in skills.split(","):
+            name, value = skill.split(":")
+            skill_time = task_time * (float(value) / goal_time)
+            skill_list.append(f"[{name}]")
+            skills_values.append(str(skill_time))
+        skill = ",".join(skill_list)
+        skill_value = ",".join(skills_values)
     else:
-        updateMainData("progress", [progress_str, goal_id])
+        skill = task_id.split(":")[1]
+        skill_value = float(task_time)
+    saveMainData("skills_stats", [skill, date, skill_value, task_id])

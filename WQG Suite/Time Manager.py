@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
 
     def get_task_id(self, name, goal_id, object_type):
         if object_type == "Goals":
-            if DataManager.loadMainData("goal", goal_id)[13]:
+            if DataManager.loadMainData("goal", goal_id, one=True)[13]:
                 QMessageBox.warning(self, "Groups cannot be selected directly for completing", "Select group's subgoal to start completing the group")
                 self.title_edit.setText("")
                 self.object_manager.isSelected = False
