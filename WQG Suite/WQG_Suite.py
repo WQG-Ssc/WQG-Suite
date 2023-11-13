@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
             cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT)")
             cur.execute("CREATE TABLE Skills_statistics (date TEXT, task_ID TEXT)")
+            cur.execute("CREATE TABLE Tasks (name, used_skills)")
 
             cur.execute("""INSERT INTO Graphs (name, value_type, color) VALUES ('Mental state', 'Letteric', '#FF0000'), 
                         ('Physical state', 'Letteric', '#F44336'), 
@@ -39,7 +40,6 @@ class MainWindow(QMainWindow):
                         ('Shedule completing', '%', '#143484'),
                         ('Shedule completing accuracy', '%', '#009F65'),
                         ('Day rating', 'Numeric', '00FFFF')""")
-
             conn.commit()
             conn.close()
         if not os.path.exists(other_db):
@@ -201,6 +201,7 @@ class MainWindow(QMainWindow):
         plans_button.setFixedSize(119, 110)
         plans_button.setObjectName("Menu")
         plans_button.setIconSize(QSize(119, 107))
+        plans_button.clicked.connect(self.plans_window)
 
         home_button = QPushButton()
         home_button.setIcon(QIcon(i_dir + r"\Home.png"))
@@ -393,6 +394,11 @@ class MainWindow(QMainWindow):
         goal_tab.goal_list_update_req.connect(self.goalListUpdate)
 
         self.stacked_widget.addWidget(goal_tab)
+        self.next_window()
+
+    def plans_window(self):
+        self.plans_tab = wstabs.Plans()
+        self.stacked_widget.addWidget(self.plans_tab)
         self.next_window()
 
     def form(self):

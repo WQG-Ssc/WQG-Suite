@@ -91,6 +91,11 @@ class MainWindow(QMainWindow):
             self.record_time = config.get("Data", "Record_time")
             self.timer_data = config.get("Timers", "Timer_1").split(",")
             self.timer_remaining_time = config.getint("Data", "Additional_timer_remaining_time")
+            needs_restore = config.getboolean("Autosave", "NeedsRestore")
+            if needs_restore:
+                start_time = config.get("Autosave", "Start_time")
+                end_time = config.get("Autosave", "End_time")
+                date = config.get("Autosave", "Date")
             self.directory = config.get("Data", "Directory")
             if self.timer_data == [""]:
                 self.timer_data = ["", "", "", "", ""]
@@ -114,8 +119,74 @@ class MainWindow(QMainWindow):
             config.add_section("Timers")
             config.set("Timers", "Timer_1", "")
 
+            config.add_section("Autosave")
+            config.set("Autosave", "Start_time", "")
+            config.set("Autosave", "End_time", "")
+            config.set("Autosave", "Date", "")
+            config.set("Autosave", "NeedsRestore", "False")
+
             with open(config_path, "w") as config_file:
                 config.write(config_file)
+
+        #Timer for autosaving
+        current_time = QTime().currentTime()
+        current_time_str = current_time.toString()
+        print(current_time_str[-4:])
+        if current_time_str[-4:] != "0:00":
+            h, m, s = current_time_str.split(":")
+            print(1)
+            self.first_turn = 600000 - (int(m[1]) * 60 + int(s)) * 1000
+            self.autosave_timer = QTimer()
+            self.autosave_timer.setInterval(self.first_turn)
+            self.autosave_timer.setSingleShot(True)
+            print(f"first_turn:{self.first_turn}")
+        else:
+            self.first_turn = 0
+            self.autosave_timer = QTimer()
+            self.autosave_timer.setInterval(600000)
+        self.autosave_timer.timeout.connect(self.autosave)
+        self.autosave_timer.start()
+
+        #Restore data from save
+        
+        if needs_restore:
+            self.write_statistics([start_time, end_time, date])
+            self.toggle_restore(False)
+            print(f"autosaved data:{start_time, end_time, date}")
+
+    def autosave(self):
+        if self.first_turn:
+            self.first_turn = 0
+            self.autosave_timer.stop()
+            self.autosave_timer = QTimer()
+            self.autosave_timer.setInterval(600000)
+            self.autosave_timer.start()
+            self.autosave_timer.timeout.connect(self.autosave)
+        if not self.isPaused:
+            start_time = self.interval_start_time
+            end_time = QTime.currentTime().toString()
+            task_id = self.task_ID
+            task_name = self.task_name
+        else:
+            start_time, end_time, task_id, task_name = ["", "", "", ""]
+
+        print(f"autosaving:{start_time, end_time, task_id, task_name}")
+
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        config.set("Autosave", "Start_time", start_time)
+        config.set("Autosave", "End_time", end_time)
+        config.set("Autosave", "Date", QDate().currentDate().toString("yyyy-MM-dd"))
+        config.set("Data", "Record_time", self.record_time.toString())
+        config.set("Data", "Task_ID", task_id)
+        config.set("Data", "Task_name", task_name)
+        config.set("Data", "Remaining_time", str(self.main_timer_remaining_time))
+        if self.timer_remaining_time == -1: 
+            self.timer_remaining_time = 0
+        config.set("Data", "Additional_timer_remaining_time", str(self.timer_remaining_time))
+
+        with open(config_path, "w") as config_file:
+            config.write(config_file)
 
     def initializeUI(self):
         self.setWindowTitle("WS Time Manager")
@@ -505,6 +576,7 @@ class MainWindow(QMainWindow):
                     self.main_timer.setInterval(self.main_timer_remaining_time)
                 
                     self.main_timer.timeout.connect(self.set_normal)
+                self.toggle_restore(True)
             else:
                 self.isPaused = True
                 self.toggle_button.setIcon(QIcon(r"Files\Icons\start.png"))
@@ -517,8 +589,16 @@ class MainWindow(QMainWindow):
                     else:
                         self.timer_remaining_time = self.timer.remainingTime() + 1#Это будет отмечать что таймер включен
                         self.timer.stop()
+                self.toggle_restore(False)
         else:
             QMessageBox.warning(self, "Unable to start record", "Select a task to start a record")
+
+    def toggle_restore(self, value):
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        config.set("Autosave", "NeedsRestore", str(value))
+        with open(config_path, "w") as config_file:
+            config.write(config_file)
 
     def toggle_timer(self, button, t_edit=None):
         if button.isChecked():
@@ -626,13 +706,21 @@ class MainWindow(QMainWindow):
             note = "(no note)"
         self.toaster.show_toast(title, note, duration=8, threaded=True, icon_path=app_icon_path)
 
-    def write_statistics(self):
-        self.interval_end_time = QTime.currentTime().toString()
-        if self.interval_start_time != self.interval_end_time:
+    def write_statistics(self, setting_mode=None):
+        if setting_mode:
+            start_time = setting_mode[0]
+            end_time = setting_mode[1]
+            date = setting_mode[2]
+        else:
+            self.interval_end_time = QTime.currentTime().toString()
+            end_time = self.interval_end_time
+            start_time = self.interval_start_time
+            date = QDate.currentDate().toString("yyyy-MM-dd")
+        if start_time != end_time:
             try:
                 conn = sql.connect(data_base)
                 cur = conn.cursor()
-                cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", (self.interval_start_time, self.interval_end_time, self.task_ID, QDate.currentDate().toString("yyyy-MM-dd")))
+                cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", (start_time, end_time, self.task_ID, date))
                 conn.commit()
                 conn.close()
             except sql.Error as error:

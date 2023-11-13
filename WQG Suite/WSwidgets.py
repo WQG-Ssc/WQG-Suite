@@ -1,9 +1,9 @@
 # -*- coding: cp1251 -*-
-import os, sys
+import os, sys, math
 import DataManager
-from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem
+from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPixmapItem
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
-from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QUrl
+from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
 from plotly.io import to_html
@@ -520,7 +520,7 @@ class GoalTreeItem(QWidget):
 
 class DateEditTool(QWidget):
     dateChanged = pyqtSignal()
-    def __init__(self):
+    def __init__(self, withLineEdit=True):
         super().__init__()
         self.current_date = QDate.currentDate()
         self.date = self.current_date
@@ -532,7 +532,8 @@ class DateEditTool(QWidget):
         self.calendar_button.setFixedSize(18, 18)
         self.calendar_button.clicked.connect(self.show_calendar)
         h_box = QHBoxLayout()
-        h_box.addWidget(self.date_edit)
+        if withLineEdit:
+            h_box.addWidget(self.date_edit)
         h_box.addWidget(self.calendar_button)
         self.setLayout(h_box)
 
@@ -1044,6 +1045,243 @@ class CompleteGoalWindow(QWidget):
         self.painter.drawRect(0, 0, 1920, 1040)
         self.painter.end()
 
+class WeekPlanView(QGraphicsView):
+    def __init__(self, start_day):
+        super().__init__()
+        self.start_day = start_day
+        self.scene = QGraphicsScene()
+        self.scene.setSceneRect(0, 0, 1920, 864)
+        self.setScene(self.scene)
+        self.scene.selectionChanged.connect(self.highlight_items)
+        self.setStyleSheet("QScrollBar{width: 0px}")
+        self.setFixedHeight(864)
+        self.MSECSTOPIXS = 0.00001
+        #Variables for creating an item
+        self.creating_item = None
+        self.start_point = None
+        self.max_end_time = 86400000
+
+        self.delete_act = QAction("Delete block")
+        self.delete_act.triggered.connect(self.delete_block)
+
+        backgroud_image = QPixmap(r"Files\icons\week plan.png")
+        background_item = self.scene.addPixmap(backgroud_image)
+        background_item.setPos(0, 0)
+        self.loadData()
+
+    def loadData(self):
+        self.blocks_dict = {}#{day_index:{block_id:block}}
+        for n in range(7):
+            day = self.start_day.toString("yyyy-MM-dd")
+            day_records = DataManager.loadMainData("day_stats", day)
+            self.blocks_dict[n] = []
+            prev_end_time = ""
+            prev_task_id = ""
+            prev_block_i = ""
+            gap_time = 0
+            for record in day_records:
+                start_time, end_time, task_id = record
+
+                current_block_i = len(self.blocks_dict[n])
+                
+                if prev_end_time:
+                    gap_time = calculate_msecs(start_time) - calculate_msecs(prev_end_time)
+                if prev_task_id == task_id and gap_time < 1800000:
+                    current_block_i = prev_block_i
+                    block = self.blocks_dict[n][current_block_i]
+                    block.end_time = end_time
+                    block.gap_time += gap_time
+                else:
+                    self.blocks_dict[n].append(TimeBlock(task_id, start_time, end_time, gap_time, n, self.blocks_dict))
+                prev_end_time = end_time
+                prev_task_id = task_id
+                prev_block_i = current_block_i
+            self.start_day = self.start_day.addDays(1)
+
+        for blocks in self.blocks_dict.values():
+            for time_block in blocks:
+                self.addBlock(time_block)
+
+    def addBlock(self, time_block):
+        time_block.updateBlockRect()
+        self.scene.addItem(time_block)
+
+    def mouseMoveEvent(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        pos = event.pos()
+        if x > 112 and y <= 865:
+            if self.start_point:
+                if not self.creating_item and y - self.start_point.y() > 9:
+                    day_index = int((x - 112) // 258)
+                    start_time = math.ceil((self.start_point.y() // 9) * 9 / self.MSECSTOPIXS)
+
+                    if self.blocks_dict[day_index]:
+                        for block in self.blocks_dict[day_index]:
+                            block_start_time = calculate_msecs(block.start_time)
+                            if block_start_time > start_time and block_start_time < self.max_end_time:
+                                self.max_end_time = block_start_time
+                    else:
+                        self.max_end_time = 86400000
+
+                    if self.max_end_time - start_time > 900000: #Means there's enough space for the creating item (>= 15 mins)
+                        self.creating_item = TimeBlock("", to_str(start_time), to_str(math.ceil((y // 9) * 9 / self.MSECSTOPIXS)), 0, day_index, self.blocks_dict)
+                        self.creating_item.updateBlockRect()
+                        self.scene.addItem(self.creating_item)
+                elif self.creating_item:
+                    end_time = math.ceil((y // 9) * 9 / self.MSECSTOPIXS)
+                    if end_time <= self.max_end_time and end_time >= calculate_msecs(self.creating_item.start_time):
+                        self.creating_item.end_time = to_str(end_time)
+                        self.creating_item.updateBlockRect()
+                        rect = self.creating_item.block_rect
+                        self.scene.removeItem(self.creating_item)
+                        self.scene.addItem(self.creating_item)
+            else:
+                if isinstance(self.itemAt(x, y), QGraphicsPixmapItem) and not self.scene.mouseGrabberItem():
+                    self.start_point = pos
+        return super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.creating_item and self.creating_item.block_rect[2]:
+            self.blocks_dict[self.creating_item.day_index].append(self.creating_item)
+            self.max_end_time = 86400000
+        self.creating_item = None
+        self.start_point = None
+        return super().mouseReleaseEvent(event)
+
+    def mousePressEvent(self, event):
+        pos = event.pos()
+        if event.button() == Qt.MouseButton.RightButton and isinstance(self.itemAt(pos), TimeBlock):
+            item = self.itemAt(pos)
+            item.setSelected(True)
+            self.menu = QMenu()
+            self.menu.addAction(self.delete_act)
+            self.menu.exec(self.mapToGlobal(pos))
+        else:
+            pass
+        return super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Delete:
+            self.delete_block()
+        return super().keyPressEvent(event)
+
+    def delete_block(self):
+        for item in self.scene.selectedItems():
+            self.blocks_dict[item.day_index].remove(item)
+            self.scene.removeItem(item)
+
+    def highlight_items(self):
+        selected_items = self.scene.selectedItems()
+        items = self.scene.items()
+        for item in items:
+            if isinstance(item, TimeBlock):
+                if item in selected_items:
+                    item.highlight()
+                else:
+                    item.dehighlight()
+
+class TimeBlock(QGraphicsItem):
+    def __init__(self, task_id, start_time, end_time, gap_time, day_index, blocks_dict):
+        super().__init__()
+        self.task_id = task_id
+        self.start_time = start_time
+        self.end_time = end_time
+        self.gap_time = gap_time
+        self.day_index = day_index
+        self.block_dict = blocks_dict
+        self.pen = None
+        self.prev_x = 0
+        self.prev_y = 0
+        self.wigth = 258
+        self.setFlags(QGraphicsItem.GraphicsItemFlag.ItemIsMovable | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable | QGraphicsItem.GraphicsItemFlag.ItemSendsScenePositionChanges)
+
+    def updateBlockRect(self):
+        #258 - day column width, 112 - span constant
+        x = self.day_index * self.wigth + 112
+        y = calculate_msecs(self.start_time) * 0.00001
+
+        height = (calculate_msecs(self.end_time) - calculate_msecs(self.start_time)) * 0.00001
+        self.block_rect = [int(x), int(y), int(height)]
+
+    def boundingRect(self):
+        return QRectF(self.block_rect[0], self.block_rect[1], self.wigth, self.block_rect[2])
+
+    def paint(self, painter, *args):
+        if self.pen:
+            painter.setPen(self.pen)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(QColor("#FFD300")))
+        painter.drawRoundedRect(self.block_rect[0], self.block_rect[1], self.wigth, self.block_rect[2], 15, 15)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            x = value.x()
+            y = value.y()
+            block_x = x + self.block_rect[0]
+            block_y = y + self.block_rect[1]
+            #Проверяем соответствие будущих координат стандартным правилам
+            if block_x <= 0:
+                x = -1 * self.block_rect[0]
+            if block_x >= 1660:
+                x = 1660 - self.block_rect[0]
+            if block_y <= 0:
+                y = -1 * self.block_rect[1]
+            if block_y + self.block_rect[2] > 864:
+                y = 864 - self.block_rect[1] - self.block_rect[2]
+            #Корректируем координаты (шаг для x - один день, для y - 15 минут)
+            x = ((x - 112) // self.wigth) * self.wigth + self.wigth
+            y = y // 9 * 9
+
+            block_x = x + self.block_rect[0]
+            block_y = y + self.block_rect[1]
+
+            day = int((block_x - 112) // self.wigth)
+            
+            if day > 6:
+                day = 6
+            
+            new_start_time = to_str(math.ceil(block_y / 0.00001))
+            new_end_time = to_str(math.ceil(((block_y + self.block_rect[2]) / 0.00001)))
+
+            isFree = True
+            if self.block_dict.get(day, False):
+                for block in self.block_dict[day]:
+                    if block != self:
+                        start_time = calculate_msecs(block.start_time)
+                        end_time = calculate_msecs(block.end_time)
+                        cb_start_time = calculate_msecs(new_start_time)
+                        cb_end_time = calculate_msecs(new_end_time)
+                    
+                        if (end_time > cb_start_time and cb_start_time >= start_time) or (cb_end_time > start_time and start_time >= cb_start_time) or (start_time == cb_start_time and end_time == cb_end_time):
+                            isFree = False
+            if isFree:
+                self.prev_x = x
+                self.prev_y = y
+                self.start_time = new_start_time
+                self.end_time = new_end_time
+
+                if day != self.day_index:
+                    self.block_dict[self.day_index].remove(self)
+                    self.block_dict[day].append(self)
+                    self.day_index = day
+
+                return super().itemChange(change, QPointF(x, y))#9 - pixels for 15 mins
+            else:
+                return super().itemChange(change, QPointF(self.prev_x, self.prev_y))
+        else:
+            return super().itemChange(change, value)
+
+    def highlight(self):
+        self.pen = QPen(QColor("#FFFFFF"), 2)
+        self.setZValue(1)
+        self.update()
+
+    def dehighlight(self):
+        self.pen = None
+        self.setZValue(0)
+        self.update()
+    
 def getGoalColor(d_diff):
     previous_key = -1
     keys = color_scale.keys()

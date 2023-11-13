@@ -1626,3 +1626,48 @@ class StatisticsEditor(QDialog):
                 QMessageBox.information(self, "An error occured", "Data has not been written")
         except Exception as error:
             QMessageBox.critical(self, "An error occured", f"Error: {error}")
+
+class Plans(QWidget):
+    def __init__(self):
+        super().__init__()
+        current_date = dt.date.today()
+        start_day = QDate().currentDate()
+        start_of_week = current_date - dt.timedelta(days=current_date.weekday())
+        end_of_week = start_of_week + dt.timedelta(days=6)
+        current_month = current_date.month
+        months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+        current_month_name = months[current_month - 1]
+        self.date_label = QLabel(f"{start_of_week.day}-{end_of_week.day} {current_month_name} {current_date.year}")
+        self.date_label.setFont(QFont("Calibri", 24, 700))
+        next_week_button = QPushButton()
+        prev_week_button = QPushButton()
+        date_edit_tool = ws.DateEditTool(False)
+        
+        week_day = QDate(start_of_week.year, start_of_week.month, start_of_week.day)
+        week_plan_view = ws.WeekPlanView(week_day)
+
+        self.day_labels = []
+        days_h_box = QHBoxLayout()
+        days_h_box.addSpacing(115)
+        
+        for n in range(7):
+            label = QLabel(f"{months[week_day.month() - 1]} {week_day.day()}")
+            label.setFont(QFont("Calibri", 20))
+            week_day = week_day.addDays(1)
+            self.day_labels.append(label)
+            days_h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        header_h_box = QHBoxLayout()
+        header_h_box.addWidget(self.date_label)
+        header_h_box.addWidget(next_week_button)
+        header_h_box.addWidget(prev_week_button)
+        header_h_box.addWidget(date_edit_tool)
+        header_h_box.addStretch()
+
+        main_v_box = QVBoxLayout()
+        main_v_box.addLayout(header_h_box)
+        main_v_box.addLayout(days_h_box)
+        main_v_box.addWidget(week_plan_view)
+        main_v_box.addStretch()
+        main_v_box.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_v_box)

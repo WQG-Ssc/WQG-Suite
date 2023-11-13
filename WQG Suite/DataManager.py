@@ -60,7 +60,7 @@ def loadMainData(data_type, *args, one=False):
         cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID == ?", args)
 
     if data_type == "day_stats":
-        cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ?", args)
+        cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ? ORDER BY start_time", args)
 
     if data_type == "group_statistics":
         cur.execute(f"SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
