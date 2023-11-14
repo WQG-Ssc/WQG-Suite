@@ -11,7 +11,7 @@ import sqlite3 as sql
 
 i_dir = r"Files\icons"
 user_config_path = r"Files\config\user.ini"
-main_db = r"Files\data\main_test.db"
+main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
 
 class MainWindow(QMainWindow):

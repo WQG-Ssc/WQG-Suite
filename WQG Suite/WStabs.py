@@ -1630,28 +1630,40 @@ class StatisticsEditor(QDialog):
 class Plans(QWidget):
     def __init__(self):
         super().__init__()
-        current_date = dt.date.today()
-        start_day = QDate().currentDate()
-        start_of_week = current_date - dt.timedelta(days=current_date.weekday())
-        end_of_week = start_of_week + dt.timedelta(days=6)
-        current_month = current_date.month
-        months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
-        current_month_name = months[current_month - 1]
-        self.date_label = QLabel(f"{start_of_week.day}-{end_of_week.day} {current_month_name} {current_date.year}")
+        self.date_edit_tool = ws.DateEditTool(False)
+        self.date_edit_tool.dateChanged.connect(self.change_current_date)
+        self.current_date = dt.date.today()
+        
+        self.months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+        self.current_date = self.current_date - dt.timedelta(days=self.current_date.weekday())
+        end_of_week = self.current_date + dt.timedelta(days=6)
+        self.date_label = QLabel(f"{self.current_date.day}-{end_of_week.day} {self.months[self.current_date.month - 1]} {self.current_date.year}")
+        
         self.date_label.setFont(QFont("Calibri", 24, 700))
         next_week_button = QPushButton()
+        next_week_button.setFixedSize(18, 34)
+        next_week_button.setIconSize(QSize(18, 34))
+        next_week_button.setObjectName("Tool")
+        next_week_button.setIcon(QIcon(i_dir + r"\next week.png"))
+        next_week_button.clicked.connect(self.next_week)
+        next_week_button.setShortcut(Qt.Key.Key_Right)
         prev_week_button = QPushButton()
-        date_edit_tool = ws.DateEditTool(False)
-        
-        week_day = QDate(start_of_week.year, start_of_week.month, start_of_week.day)
-        week_plan_view = ws.WeekPlanView(week_day)
+        prev_week_button.setFixedSize(18, 34)
+        prev_week_button.setIconSize(QSize(18, 34))
+        prev_week_button.setObjectName("Tool")
+        prev_week_button.setIcon(QIcon(i_dir + r"\prev week.png"))
+        prev_week_button.setShortcut(Qt.Key.Key_Left)
+        prev_week_button.clicked.connect(self.prev_week)
+
+        week_day = QDate(self.current_date.year, self.current_date.month, self.current_date.day)
+        self.week_plan_view = ws.WeekPlanView(week_day)
 
         self.day_labels = []
         days_h_box = QHBoxLayout()
         days_h_box.addSpacing(115)
         
         for n in range(7):
-            label = QLabel(f"{months[week_day.month() - 1]} {week_day.day()}")
+            label = QLabel(f"{self.months[week_day.month() - 1]} {week_day.day()}")
             label.setFont(QFont("Calibri", 20))
             week_day = week_day.addDays(1)
             self.day_labels.append(label)
@@ -1659,15 +1671,45 @@ class Plans(QWidget):
 
         header_h_box = QHBoxLayout()
         header_h_box.addWidget(self.date_label)
-        header_h_box.addWidget(next_week_button)
         header_h_box.addWidget(prev_week_button)
-        header_h_box.addWidget(date_edit_tool)
+        header_h_box.addWidget(next_week_button)
+        header_h_box.addWidget(self.date_edit_tool)
         header_h_box.addStretch()
 
         main_v_box = QVBoxLayout()
         main_v_box.addLayout(header_h_box)
         main_v_box.addLayout(days_h_box)
-        main_v_box.addWidget(week_plan_view)
+        main_v_box.addWidget(self.week_plan_view)
         main_v_box.addStretch()
         main_v_box.setContentsMargins(0, 0, 0, 0)
         self.setLayout(main_v_box)
+
+    def next_week(self):
+        self.current_date = self.current_date + dt.timedelta(weeks=1)
+        self.update_plan()
+
+    def prev_week(self):
+        self.current_date = self.current_date - dt.timedelta(weeks=1)
+        self.update_plan()
+
+    def change_current_date(self):
+        date = self.date_edit_tool.date
+        new_date = dt.date(date.year(), date.month(), date.day())
+        if new_date.weekday != 0:
+            new_date = new_date - dt.timedelta(days=new_date.weekday())
+        self.current_date = new_date
+        self.update_plan()
+        
+    def update_plan(self):
+        self.update_date_labels()
+        self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day))
+
+    def update_date_labels(self):
+        end_of_week = self.current_date + dt.timedelta(days=6)
+        current_month_name = self.months[self.current_date.month - 1]
+        self.date_label.setText(f"{self.current_date.day}-{end_of_week.day} {current_month_name} {self.current_date.year}")
+
+        week_day = QDate(self.current_date.year, self.current_date.month, self.current_date.day)
+        for label in self.day_labels:
+            label.setText(f"{self.months[week_day.month() - 1]} {week_day.day()}")
+            week_day = week_day.addDays(1)

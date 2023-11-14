@@ -1,8 +1,8 @@
 # -*- coding: cp1251 -*-
 import os, sys, math
 import DataManager
-from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPixmapItem
-from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon
+from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsTextItem
+from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics
 from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
@@ -551,7 +551,6 @@ class DateEditTool(QWidget):
 
     def close_calendar(self, date):
         self.dialog.close()
-        print(f"553:{date}")
         self.date_edit.setDate(date)
         self.date = date
 
@@ -1063,6 +1062,8 @@ class WeekPlanView(QGraphicsView):
 
         self.delete_act = QAction("Delete block")
         self.delete_act.triggered.connect(self.delete_block)
+        self.copy_act = QAction("Copy block")
+        self.copy_act.triggered.connect(self.copy_block)
 
         backgroud_image = QPixmap(r"Files\icons\week plan.png")
         background_item = self.scene.addPixmap(backgroud_image)
@@ -1080,31 +1081,42 @@ class WeekPlanView(QGraphicsView):
             prev_block_i = ""
             gap_time = 0
             for record in day_records:
+                #print(f"record:{record}")
                 start_time, end_time, task_id = record
 
                 current_block_i = len(self.blocks_dict[n])
                 
                 if prev_end_time:
+                    #print(f"start:{start_time}")
+                    #print(f"end:{prev_end_time}")
                     gap_time = calculate_msecs(start_time) - calculate_msecs(prev_end_time)
                 if prev_task_id == task_id and gap_time < 1800000:
                     current_block_i = prev_block_i
                     block = self.blocks_dict[n][current_block_i]
                     block.end_time = end_time
                     block.gap_time += gap_time
+                    #print(gap_time)
                 else:
                     self.blocks_dict[n].append(TimeBlock(task_id, start_time, end_time, gap_time, n, self.blocks_dict))
                 prev_end_time = end_time
                 prev_task_id = task_id
                 prev_block_i = current_block_i
+
             self.start_day = self.start_day.addDays(1)
 
         for blocks in self.blocks_dict.values():
             for time_block in blocks:
-                self.addBlock(time_block)
+                time_block.updateBlockRect()
+                self.scene.addItem(time_block)
 
     def addBlock(self, time_block):
         time_block.updateBlockRect()
+        self.blocks_dict[time_block.day_index].append(time_block)
         self.scene.addItem(time_block)
+
+    def removeBlock(self, time_block):
+        self.blocks_dict[time_block.day_index].remove(time_block)
+        self.scene.removeItem(time_block)
 
     def mouseMoveEvent(self, event):
         x = event.pos().x()
@@ -1127,15 +1139,14 @@ class WeekPlanView(QGraphicsView):
                     if self.max_end_time - start_time > 900000: #Means there's enough space for the creating item (>= 15 mins)
                         self.creating_item = TimeBlock("", to_str(start_time), to_str(math.ceil((y // 9) * 9 / self.MSECSTOPIXS)), 0, day_index, self.blocks_dict)
                         self.creating_item.updateBlockRect()
-                        self.scene.addItem(self.creating_item)
+                        self.addBlock(self.creating_item)
                 elif self.creating_item:
                     end_time = math.ceil((y // 9) * 9 / self.MSECSTOPIXS)
                     if end_time <= self.max_end_time and end_time >= calculate_msecs(self.creating_item.start_time):
                         self.creating_item.end_time = to_str(end_time)
                         self.creating_item.updateBlockRect()
-                        rect = self.creating_item.block_rect
-                        self.scene.removeItem(self.creating_item)
-                        self.scene.addItem(self.creating_item)
+                        self.removeBlock(self.creating_item)
+                        self.addBlock(self.creating_item)
             else:
                 if isinstance(self.itemAt(x, y), QGraphicsPixmapItem) and not self.scene.mouseGrabberItem():
                     self.start_point = pos
@@ -1156,6 +1167,7 @@ class WeekPlanView(QGraphicsView):
             item.setSelected(True)
             self.menu = QMenu()
             self.menu.addAction(self.delete_act)
+            self.menu.addAction(self.copy_act)
             self.menu.exec(self.mapToGlobal(pos))
         else:
             pass
@@ -1168,9 +1180,19 @@ class WeekPlanView(QGraphicsView):
 
     def delete_block(self):
         for item in self.scene.selectedItems():
-            self.blocks_dict[item.day_index].remove(item)
-            self.scene.removeItem(item)
+            self.removeBlock(item)
 
+    def copy_block(self):
+        copied_blocks = []
+        for block in self.scene.selectedItems():
+            item_copy = TimeBlock(block.task_id, block.start_time, block.end_time, block.gap_time, block.day_index, self.blocks_dict)
+            item_copy.updateBlockRect()
+            self.addBlock(item_copy)
+            copied_blocks.append(item_copy)
+        self.scene.clearSelection()
+        for block in copied_blocks:
+            block.setSelected(True)
+            
     def highlight_items(self):
         selected_items = self.scene.selectedItems()
         items = self.scene.items()
@@ -1180,6 +1202,14 @@ class WeekPlanView(QGraphicsView):
                     item.highlight()
                 else:
                     item.dehighlight()
+
+    def changeWeek(self, new_start_day):
+        self.start_day = new_start_day
+        self.scene.clear()
+        backgroud_image = QPixmap(r"Files\icons\week plan.png")
+        background_item = self.scene.addPixmap(backgroud_image)
+        background_item.setPos(0, 0)
+        self.loadData()
 
 class TimeBlock(QGraphicsItem):
     def __init__(self, task_id, start_time, end_time, gap_time, day_index, blocks_dict):
@@ -1213,6 +1243,32 @@ class TimeBlock(QGraphicsItem):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(QBrush(QColor("#FFD300")))
         painter.drawRoundedRect(self.block_rect[0], self.block_rect[1], self.wigth, self.block_rect[2], 15, 15)
+        if self.gap_time:
+            painter.setPen(QPen(QColor("#AAAAAA")))
+            painter.setBrush(QBrush(QColor("#AAAAAA")))
+            
+            painter.drawRect(self.block_rect[0], self.block_rect[1] + 15, self.wigth, self.gap_time * 0.00001)
+        
+        painter.setPen(QPen(QColor("#000000")))
+        if self.block_rect[2] > 9:
+            font_metrics = QFontMetrics(QFont("Calibri", 16, 700))
+            painter.setFont(QFont("Calibri", 16, 700))
+            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, self.task_id)
+            painter.setFont(QFont("Calibri", 10))
+            if self.block_rect[2] > 45:
+                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 35, self.start_time[:-3] + "-" + self.end_time[:-3])
+            else:
+                header_text_width = font_metrics.horizontalAdvance(self.task_id)
+                if self.block_rect[2] > 18:
+                    painter.drawText(self.block_rect[0] + 12 + header_text_width, self.block_rect[1] + 18, self.start_time[:-3] + "-" + self.end_time[:-3])
+                else:
+                    painter.drawText(self.block_rect[0] + 12 + header_text_width, self.block_rect[1] + 14, self.start_time[:-3] + "-" + self.end_time[:-3])
+        else:
+            font_metrics = QFontMetrics(QFont("Calibri", 8, 700))
+            header_text_width = font_metrics.horizontalAdvance(self.task_id)
+            painter.setFont(QFont("Calibri", 8, 700))
+            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 5, self.task_id)
+            painter.drawText(self.block_rect[0] + 12 + header_text_width, self.block_rect[1] + 8, self.start_time[:-3] + "-" + self.end_time[:-3])
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:

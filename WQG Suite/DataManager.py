@@ -2,7 +2,7 @@ import sqlite3 as sql
 import WSwidgets as ws
 import re
 from PyQt6.QtCore import QDate
-main_db = r"Files\data\main_test.db"
+main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
 
 def exception_handler(func):
