@@ -118,4 +118,8 @@ QComboBox{
 QComboBox QAbstractItemView {
     color: #FFD300
     }
+QTimeEdit{
+    color: #FFD300;
+    border: 1px solid #FFD300;
+    }
 """

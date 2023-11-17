@@ -720,7 +720,7 @@ class MainWindow(QMainWindow):
             try:
                 conn = sql.connect(data_base)
                 cur = conn.cursor()
-                cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", (start_time, end_time, self.task_ID, date))
+                cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, 1)", (start_time, end_time, self.task_ID, date))
                 conn.commit()
                 conn.close()
             except sql.Error as error:

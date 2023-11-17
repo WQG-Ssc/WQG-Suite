@@ -1224,7 +1224,7 @@ class Form(QDialog):
         super().__init__()
         self.FormFillingDate = FormFillingDate
         self.current_date = QDate().currentDate().toString("yyyy-MM-dd")
-        if self.FormFillingDate == self.current_date:
+        if self.FormFillingDate != self.current_date:
             self.setModal(True)
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
             print(f"date:{self.current_date}")
@@ -1657,32 +1657,73 @@ class Plans(QWidget):
 
         week_day = QDate(self.current_date.year, self.current_date.month, self.current_date.day)
         self.week_plan_view = ws.WeekPlanView(week_day)
+        self.week_plan_view.switch_week_req.connect(self.move_item_to_week)
 
         self.day_labels = []
+        self.time_labels = []
         days_h_box = QHBoxLayout()
         days_h_box.addSpacing(115)
+        time_h_box = QHBoxLayout()
+
+        recalc_time_button = QPushButton()
+        recalc_time_button.setShortcut("Ctrl+R")
+        recalc_time_button.setIcon(QIcon(i_dir + r"\recurring_on.png"))
+        recalc_time_button.setObjectName("Tool")
+        recalc_time_button.setFixedSize(17, 17)
+        recalc_time_button.clicked.connect(self.recalculate_time)
+        time_h_box.addSpacing(50)
+        time_h_box.addWidget(recalc_time_button)
+        time_h_box.addSpacing(40)
         
         for n in range(7):
             label = QLabel(f"{self.months[week_day.month() - 1]} {week_day.day()}")
             label.setFont(QFont("Calibri", 20))
+            time_label = QLabel("0 hours")
+            time_label.setFont(QFont("Calibri", 18))
             week_day = week_day.addDays(1)
             self.day_labels.append(label)
             days_h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignHCenter)
+            self.time_labels.append(time_label)
+            time_h_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        save_button = QPushButton()
+        save_button.setIcon(QIcon(i_dir + r"\Tasks.png"))
+        save_button.setStyleSheet("QPushButton{border: 1px solid #FFD300; background-color: #000000} QPushButton::pressed{border: 1px solid #FFD300; background-color: #7F6900}")
+        save_button.setFixedWidth(75)
+        save_button.setShortcut("Ctrl+S")
+        save_button.clicked.connect(self.save_plan)
 
         header_h_box = QHBoxLayout()
         header_h_box.addWidget(self.date_label)
         header_h_box.addWidget(prev_week_button)
         header_h_box.addWidget(next_week_button)
         header_h_box.addWidget(self.date_edit_tool)
+        header_h_box.addWidget(save_button)
         header_h_box.addStretch()
 
         main_v_box = QVBoxLayout()
         main_v_box.addLayout(header_h_box)
         main_v_box.addLayout(days_h_box)
         main_v_box.addWidget(self.week_plan_view)
+        main_v_box.addLayout(time_h_box)
         main_v_box.addStretch()
         main_v_box.setContentsMargins(0, 0, 0, 0)
         self.setLayout(main_v_box)
+
+    def recalculate_time(self):
+        blocks_dict = self.week_plan_view.blocks_dict
+        for i in range(7):
+            time = 0
+            for item in blocks_dict[i]:
+                time += (ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)) / 3600000
+            self.time_labels[i].setText(str(round(time, 2)) + " hours")
+
+    def move_item_to_week(self, mode, items):
+        if mode == "previous":
+            self.current_date = self.current_date - dt.timedelta(weeks=1)
+        else:
+            self.current_date = self.current_date + dt.timedelta(weeks=1)
+        self.update_plan(items)
 
     def next_week(self):
         self.current_date = self.current_date + dt.timedelta(weeks=1)
@@ -1700,11 +1741,12 @@ class Plans(QWidget):
         self.current_date = new_date
         self.update_plan()
         
-    def update_plan(self):
-        self.update_date_labels()
-        self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day))
-
-    def update_date_labels(self):
+    def update_plan(self, exceptItems=[]):
+        self.update_labels()
+        self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day), exceptItems)
+        
+    def update_labels(self):
+        self.recalculate_time()
         end_of_week = self.current_date + dt.timedelta(days=6)
         current_month_name = self.months[self.current_date.month - 1]
         self.date_label.setText(f"{self.current_date.day}-{end_of_week.day} {current_month_name} {self.current_date.year}")
@@ -1713,3 +1755,16 @@ class Plans(QWidget):
         for label in self.day_labels:
             label.setText(f"{self.months[week_day.month() - 1]} {week_day.day()}")
             week_day = week_day.addDays(1)
+
+    def save_plan(self):
+        blocks_dict = self.week_plan_view.blocks_dict
+        for i in blocks_dict:
+            for block in blocks_dict[i]:
+                day = self.current_date + dt.timedelta(days=block.day_index)
+                task = block.task_id.split(":")
+                if len(task) > 1 and task[0] == "t":
+                    busy = DataManager.loadMainData("task", task[1])[2]
+                else:
+                    busy = 0
+                DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
+                DataManager.saveMainData("Plans", [block.start_time, block.end_time, block.task_id, day.strftime("%Y-%m-%d"), busy])

@@ -2,7 +2,7 @@ import sqlite3 as sql
 import WSwidgets as ws
 import re
 from PyQt6.QtCore import QDate
-main_db = r"Files\data\main.db"
+main_db = r"Files\data\main_test.db"
 other_db = r"Files\data\other.db"
 
 def exception_handler(func):
@@ -77,6 +77,12 @@ def loadMainData(data_type, *args, one=False):
     if data_type == "get_goal_ids":
         cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{args[0]}.%'")
 
+    if data_type == "task":
+        cur.execute("SELECT used_skills, save, busy FROM Tasks WHERE name == ?", args)
+
+    if data_type == "plans":
+        cur.execute("SELECT start_time, end_time, task_ID FROM Plans WHERE date == ? ORDER BY start_time", args)
+
     if one:
         data = cur.fetchone()
     else:
@@ -114,6 +120,16 @@ def saveMainData(data_type, args):
     if data_type == "statistics":
         cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", args)
 
+    if data_type == "task":
+        cur.execute("SELECT name FROM Tasks WHERE name == ?", (args[3],))
+        exists = cur.fetchone()
+        if exists:
+            cur.execute("UPDATE Tasks SET used_skills = ?, save = ?, busy = ? WHERE name == ?", args)
+        else:
+            cur.execute("INSERT INTO Tasks (used_skills, save, busy, name) VALUES (?, ?, ?, ?)", args)
+
+    if data_type == "Plans":
+        cur.execute("INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES (?, ?, ?, ?, ?)", args)
     conn.commit()
     conn.close()
     return True
@@ -183,6 +199,9 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Skills_statistics WHERE task_ID == ?", (args[0],))
         if args[1]:
             cur.execute(f"DELETE FROM Skills_statistics WHERE task_ID LIKE '{args[0]}.%'")
+
+    if data_type == "Plans":
+        cur.execute("DELETE FROM Plans WHERE date == ?", args)
     conn.commit()
     conn.close()
 
