@@ -1,6 +1,6 @@
 # -*- coding: cp1251 -*-
 import os, sys, configparser, subprocess, DataManager
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QComboBox
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
 from style_sheet import style_sheet
@@ -54,7 +54,6 @@ class MainWindow(QMainWindow):
     def initializeUI(self):
         self.setWindowTitle("WQG's Suite")
         self.setWindowIcon(QIcon("Files\Icon.png"))
-        self.FormFillingDate = ""
         self.anyChangesMade = False
         self.isGoalListNeedsToBeUpdated = False
         self.showAnimation()
@@ -88,7 +87,6 @@ class MainWindow(QMainWindow):
             self.user_name = config.get("User", "Name")
             self.user_password = config.get("User", "Password")
             self.user_image = QPixmap(r"Files/icons/User/Profile_picture.png")
-            self.FormFillingDate = config.get("Data", "FormFillingDate")
 
             self.main_menu()
 
@@ -347,12 +345,35 @@ class MainWindow(QMainWindow):
 
     def settings(self):
         self.dialog = QDialog()
+        self.dialog.setWindowTitle("Settings")
         stat_edit_button = QPushButton("Edit statistics")
         stat_edit_button.clicked.connect(self.statistics_editor)
+        clear_db_button = QPushButton("Clear a database")
+        clear_db_button.clicked.connect(self.clear_db_dialog)
         v_box = QVBoxLayout()
         v_box.addWidget(stat_edit_button)
+        v_box.addWidget(clear_db_button)
         self.dialog.setLayout(v_box)
         self.dialog.show()
+
+    def clear_db_dialog(self):
+        self.dialog = QDialog()
+        self.dialog.setWindowTitle("Clear table")
+        self.dialog.setModal(True)
+        table_combo = QComboBox()
+        table_combo.addItems(["Main_statistics", "Goals", "Skills", "Branches", "Days", "Graphs", "Characteristics", "Skills_statistics", "Tasks", "Plans"])
+        clear_button = QPushButton("Clear")
+        clear_button.clicked.connect(lambda: self.clear_table(table_combo))
+        v_box = QVBoxLayout()
+        v_box.addWidget(table_combo)
+        v_box.addWidget(clear_button)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
+
+    def clear_table(self, table_combo):
+        if QMessageBox.question(self, "Clear table", f"Are you sure to clear the table: {table_combo.currentText()}?") == QMessageBox.StandardButton.Yes:
+            DataManager.deleteMainData("clear table", table_combo.currentText())
+        self.dialog.close()
 
     def notes(self):
         self.dialog = QDialog()
@@ -399,11 +420,13 @@ class MainWindow(QMainWindow):
 
     def plans_window(self):
         self.plans_tab = wstabs.Plans()
+        self.plans_tab.week_plan_view.changesMade.connect(self.changesMade)
+        self.plans_tab.changesSaved.connect(self.changesSaved)
         self.stacked_widget.addWidget(self.plans_tab)
         self.next_window()
 
     def form(self):
-        self.form = wstabs.Form(self.FormFillingDate)
+        self.form = wstabs.Form()
 
     def goalListUpdate(self):
         self.isGoalListNeedsToBeUpdated = True

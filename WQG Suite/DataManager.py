@@ -106,7 +106,12 @@ def saveMainData(data_type, args):
 
     if data_type == "skills_stats":
         values = f"'{args[1]}','{args[3]}',{args[2]}"
-        cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {args[0]}) VALUES ({values})")
+        skills_str = ""
+        skills = args[0].split(",")
+        for skill in skills:
+            skills_str += f"[{skill}],"
+        skills_str = skills_str.rstrip(",")
+        cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {skills_str}) VALUES ({values})")
 
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
@@ -118,7 +123,7 @@ def saveMainData(data_type, args):
         cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', date) VALUES (?, ?, ?, ?)", args)
 
     if data_type == "statistics":
-        cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date) VALUES (?, ?, ?, ?)", args)
+        cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "task":
         cur.execute("SELECT name FROM Tasks WHERE name == ?", (args[3],))
@@ -185,16 +190,23 @@ def deleteMainData(data_type, *args):
     if data_type == "branch":
         cur.execute("DELETE FROM Branches WHERE RowID == ?", args)
         cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
+
     if data_type == "goal":
         cur.execute("DELETE FROM Goals WHERE ID == ?", (args[0],))
         if args[1]:
             cur.execute(f"DELETE FROM Goals WHERE ID LIKE '{args[0]}.%'")
+
     if data_type == "characteristic":
         cur.execute("DELETE FROM Characteristics WHERE name == ?", args)
+
     if data_type == "statistics":
         cur.execute("DELETE FROM Main_statistics WHERE task_ID == ?", (args[0],))
         if args[1]:
             cur.execute(f"DELETE FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
+
+    if data_type == "stats":
+        cur.execute("DELETE FROM Main_statistics WHERE date == ?", (args))
+
     if data_type == "skills_stats":
         cur.execute("DELETE FROM Skills_statistics WHERE task_ID == ?", (args[0],))
         if args[1]:
@@ -202,6 +214,12 @@ def deleteMainData(data_type, *args):
 
     if data_type == "Plans":
         cur.execute("DELETE FROM Plans WHERE date == ?", args)
+
+    if data_type == "clear table":
+        cur.execute(f"DELETE FROM {args[0]}")
+
+    if data_type == "time block":
+        cur.execute("DELETE FROM Plans WHERE date == ? and start_time == ? and end_time == ?", args)
     conn.commit()
     conn.close()
 
@@ -368,6 +386,7 @@ def recalculateSkills():#Calculate values of all skills
         updateMainData("skill_value", [skill_value, skill[0]])
 
 def addSkillStat(task_id, task_time, date):
+    task = task_id.split(":")
     if len(task_id.split(".")) > 1:
         skill_list = []
         skills_values = []
@@ -381,7 +400,23 @@ def addSkillStat(task_id, task_time, date):
             skills_values.append(str(skill_time))
         skill = ",".join(skill_list)
         skill_value = ",".join(skills_values)
-    else:
-        skill = task_id.split(":")[1]
+    elif task[0] == "s":
+        skill = task[1]
         skill_value = float(task_time)
+    elif task[0] == "t":
+        if ws.getBusyValue(task_id):
+            used_skills = loadMainData("task", task[1], one=True)[1]
+            skill_list = []
+            skills_values = []
+            for skill in used_skills.split(","):
+                name, p = skill.split(":")
+                skill_list.append(name)
+                skills_values.append(task_time * (p / 100))
+            skill = ",".join(skill_list)
+            skill_value = ",".join(skills_values)
+        else:
+            return None
+    else:
+        return None
+
     saveMainData("skills_stats", [skill, date, skill_value, task_id])

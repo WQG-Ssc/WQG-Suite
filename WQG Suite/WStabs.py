@@ -1220,9 +1220,11 @@ class StatisticsTab(QWidget):
                 break
 
 class Form(QDialog):
-    def __init__(self, FormFillingDate):
+    def __init__(self):
         super().__init__()
-        self.FormFillingDate = FormFillingDate
+        parser = configparser.ConfigParser()
+        parser.read(r"Files\config\user.ini")
+        self.FormFillingDate = parser.get("Data", "FormFillingDate")
         self.current_date = QDate().currentDate().toString("yyyy-MM-dd")
         if self.FormFillingDate != self.current_date:
             self.setModal(True)
@@ -1313,6 +1315,8 @@ class Form(QDialog):
             print(f"line_edit_dict{self.line_edit_dict}")
             print(f"goal_ccs_dict:{self.goal_ccs_dict}")
 
+            self.day_plan_view = ws.WeekPlanView(QDate().currentDate(), False)
+
             grid = QGridLayout()
             grid.addWidget(m_state_label, 0, 0)
             grid.addWidget(m_state_line_edit, 0, 1)
@@ -1321,13 +1325,18 @@ class Form(QDialog):
             grid.addWidget(day_rate_label, 2, 0)
             grid.addWidget(day_rate_line_edit, 2, 1)
 
-            main_v_box = QVBoxLayout()
-            main_v_box.addWidget(today_label)
-            main_v_box.addLayout(grid)
-            main_v_box.addWidget(change_list_widget)
-            main_v_box.addWidget(day_note)
-            main_v_box.addWidget(ok_button)
-            self.setLayout(main_v_box)
+            v_box = QVBoxLayout()
+            v_box.addWidget(today_label)
+            v_box.addLayout(grid)
+            v_box.addWidget(change_list_widget)
+            v_box.addWidget(day_note)
+            v_box.addWidget(ok_button)
+
+            main_h_box = QHBoxLayout()
+            main_h_box.addLayout(v_box)
+            main_h_box.addWidget(self.day_plan_view)
+
+            self.setLayout(main_h_box)
             self.show()
         else:
             QMessageBox.warning(self, "Form is already filled", "Form is already filled")
@@ -1336,6 +1345,17 @@ class Form(QDialog):
         day_stats = [item.text() for item in self.day_stats_edits if item.text() != ""]
 
         if len(day_stats) == 3:
+            DataManager.deleteMainData("stats", self.current_date)
+            DataManager.deleteMainData("plans", self.current_date)
+            self.records_dict = {}
+            for item in self.day_plan_view.blocks_dict[0]:
+                if item.task_id in self.records_dict:
+                    self.records_dict[item.task_id] += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                else:
+                    self.records_dict[item.task_id] = ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                busy = ws.getBusyValue(item.task_id)
+                DataManager.saveMainData("statistics", [item.start_time, item.end_time, item.task_id, self.current_date, busy])
+
             DataManager.saveMainData("day", [self.current_date] + day_stats + [None, None, None])
             for goal_id in self.records_dict.keys():
                 if len(goal_id.split(".")) > 1:
@@ -1535,7 +1555,7 @@ class StatisticsEditor(QDialog):
                 self.characts_list.addedItemsText[charact] = line_edit
 
     def save_data(self):
-        try:
+        #try:
             success = None
             index = self.edit_mode.currentIndex()
             if index == 0 and self.goal_id:
@@ -1574,6 +1594,7 @@ class StatisticsEditor(QDialog):
                                 if any(day_stat):
                                     task_id_list.append(day_stat[2])
                                     DataManager.addSkillStat(day_stat[2], (ws.calculate_msecs(day_stat[1]) - ws.calculate_msecs(day_stat[0])) / 3600000, day_stat[3])
+                                    day_stat.append(1)#busy value
                                     success = DataManager.saveMainData("statistics", day_stat)
                             else:
                                 success = False
@@ -1593,7 +1614,7 @@ class StatisticsEditor(QDialog):
                                     time_dict[date] = end_time
                                     print([start_time, end_time, day_stat[1], date])
                                     DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
-                                    success = DataManager.saveMainData("statistics", [start_time, end_time, day_stat[1], date])
+                                    success = DataManager.saveMainData("statistics", [start_time, end_time, day_stat[1], date, 1])
                             else:
                                 success = False
                     task_id_list = list(set(task_id_list))
@@ -1624,10 +1645,11 @@ class StatisticsEditor(QDialog):
                 QMessageBox.information(self, "Data has been written", "Data has been written")
             elif success == False:
                 QMessageBox.information(self, "An error occured", "Data has not been written")
-        except Exception as error:
-            QMessageBox.critical(self, "An error occured", f"Error: {error}")
+        #except Exception as error:
+        #    QMessageBox.critical(self, "An error occured", f"Error: {error}")
 
 class Plans(QWidget):
+    changesSaved = pyqtSignal()
     def __init__(self):
         super().__init__()
         self.date_edit_tool = ws.DateEditTool(False)
@@ -1712,6 +1734,7 @@ class Plans(QWidget):
 
     def recalculate_time(self):
         blocks_dict = self.week_plan_view.blocks_dict
+        print(f"bd:{blocks_dict}")
         for i in range(7):
             time = 0
             for item in blocks_dict[i]:
@@ -1719,6 +1742,7 @@ class Plans(QWidget):
             self.time_labels[i].setText(str(round(time, 2)) + " hours")
 
     def move_item_to_week(self, mode, items):
+        self.save_plan(exceptItems=items)
         if mode == "previous":
             self.current_date = self.current_date - dt.timedelta(weeks=1)
         else:
@@ -1742,8 +1766,8 @@ class Plans(QWidget):
         self.update_plan()
         
     def update_plan(self, exceptItems=[]):
-        self.update_labels()
         self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day), exceptItems)
+        self.update_labels()
         
     def update_labels(self):
         self.recalculate_time()
@@ -1756,15 +1780,19 @@ class Plans(QWidget):
             label.setText(f"{self.months[week_day.month() - 1]} {week_day.day()}")
             week_day = week_day.addDays(1)
 
-    def save_plan(self):
+    def save_plan(self, *args, exceptItems=[]):
         blocks_dict = self.week_plan_view.blocks_dict
         for i in blocks_dict:
+            print(f"bd:{blocks_dict}")
+            day = self.current_date + dt.timedelta(days=i)
+            DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
             for block in blocks_dict[i]:
-                day = self.current_date + dt.timedelta(days=block.day_index)
-                task = block.task_id.split(":")
-                if len(task) > 1 and task[0] == "t":
-                    busy = DataManager.loadMainData("task", task[1])[2]
-                else:
-                    busy = 0
-                DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
-                DataManager.saveMainData("Plans", [block.start_time, block.end_time, block.task_id, day.strftime("%Y-%m-%d"), busy])
+                if block.task_id and block not in exceptItems:
+                    busy = ws.getBusyValue(block.task_id)
+                    DataManager.saveMainData("Plans", [block.start_time, block.end_time, block.task_id, day.strftime("%Y-%m-%d"), busy])
+        if not exceptItems:
+            self.changesSaved.emit()
+
+    def saveData(self):
+        if QMessageBox.question(self, "Unsaved changes", "Some changes were made. Save changes?") == QMessageBox.StandardButton.Yes:
+            self.save_plan()
