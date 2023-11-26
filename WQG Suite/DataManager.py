@@ -42,7 +42,7 @@ def loadMainData(data_type, *args, one=False):
         cur.execute(f"SELECT date, [{args[0]}] FROM Days")
 
     if data_type == "day_data":
-        cur.execute("SELECT [Mental state], [Physical state], [Day rate] FROM Days WHERE date == ?", args)
+        cur.execute("SELECT [Mental state], [Physical state], [Day rate], [Work time] FROM Days WHERE date == ?", args)
     
     if data_type == "graphs":
         cur.execute("SELECT * FROM Graphs")
@@ -78,7 +78,7 @@ def loadMainData(data_type, *args, one=False):
         cur.execute(f"SELECT ID FROM Goals WHERE ID LIKE '{args[0]}.%'")
 
     if data_type == "task":
-        cur.execute("SELECT used_skills, save, busy FROM Tasks WHERE name == ?", args)
+        cur.execute("SELECT used_skills, busy FROM Tasks WHERE name == ?", args)
 
     if data_type == "plans":
         cur.execute("SELECT start_time, end_time, task_ID FROM Plans WHERE date == ? ORDER BY start_time", args)
@@ -105,33 +105,29 @@ def saveMainData(data_type, args):
         cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{args}' REAL")
 
     if data_type == "skills_stats":
+        print(f"args:{args}")
         values = f"'{args[1]}','{args[3]}',{args[2]}"
-        skills_str = ""
-        skills = args[0].split(",")
-        for skill in skills:
-            skills_str += f"[{skill}],"
-        skills_str = skills_str.rstrip(",")
-        cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {skills_str}) VALUES ({values})")
+        cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {args[0]}) VALUES ({values})")
 
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
         
     if data_type == "day":
-        cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time', 'Shedule completing', 'Shedule completing accuracy') VALUES (?, ?, ?, ?, ?, ?, ?)", args)
+        cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time') VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "day_data":
-        cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', date) VALUES (?, ?, ?, ?)", args)
+        cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', 'Work time', date) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "statistics":
         cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "task":
-        cur.execute("SELECT name FROM Tasks WHERE name == ?", (args[3],))
+        cur.execute("SELECT name FROM Tasks WHERE name == ?", (args[2],))
         exists = cur.fetchone()
         if exists:
-            cur.execute("UPDATE Tasks SET used_skills = ?, save = ?, busy = ? WHERE name == ?", args)
+            cur.execute("UPDATE Tasks SET used_skills = ?, busy = ? WHERE name == ?", args)
         else:
-            cur.execute("INSERT INTO Tasks (used_skills, save, busy, name) VALUES (?, ?, ?, ?)", args)
+            cur.execute("INSERT INTO Tasks (used_skills, busy, name) VALUES (?, ?, ?)", args)
 
     if data_type == "Plans":
         cur.execute("INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES (?, ?, ?, ?, ?)", args)
@@ -171,7 +167,7 @@ def updateMainData(data_type, args):
         cur.execute("UPDATE Goals SET state = ? WHERE ID == ?", args)
 
     if data_type == "day_data":
-        cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ? WHERE date == ?", args)
+        cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ?, 'Work time' WHERE date == ?", args)
 
     if data_type == "skill_value":
         cur.execute(f"UPDATE Skills SET time = ? WHERE name == ?", args)
@@ -179,6 +175,11 @@ def updateMainData(data_type, args):
     if data_type == "goal_id":
         cur.execute("UPDATE Main_statistics SET task_ID = ? WHERE task_ID == ?", args)
         cur.execute("UPDATE Skills_statistics SET task_ID = ? WHERE task_ID == ?", args)
+
+    if data_type == "time_block":
+        print(f"args:{args}")
+        cur.execute("UPDATE Plans SET end_time = ? WHERE start_time == ? and end_time == ? and task_ID == ? and date == ?", (args[0], args[1].start_time, args[1].end_time, args[1].task_id, args[2]))
+        
     conn.commit()
     conn.close()
     return True
@@ -220,6 +221,15 @@ def deleteMainData(data_type, *args):
 
     if data_type == "time block":
         cur.execute("DELETE FROM Plans WHERE date == ? and start_time == ? and end_time == ?", args)
+
+    if data_type == "task":
+        cur.execute("SELECT name FROM Tasks WHERE name == ?", args)
+        if cur.fetchone():
+            cur.execute("DELETE FROM Tasks WHERE name == ?", args)
+            return True
+        else:
+            return False
+
     conn.commit()
     conn.close()
 
@@ -379,7 +389,6 @@ def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=F
 
 def recalculateSkills():#Calculate values of all skills
     skills = loadMainData("names", "Skills")
-
     for skill in skills:
         stats = loadMainData("skill_stat", skill[0])
         skill_value = sum([item[1] for item in stats])
@@ -401,7 +410,7 @@ def addSkillStat(task_id, task_time, date):
         skill = ",".join(skill_list)
         skill_value = ",".join(skills_values)
     elif task[0] == "s":
-        skill = task[1]
+        skill = f"[{task[1]}]"
         skill_value = float(task_time)
     elif task[0] == "t":
         if ws.getBusyValue(task_id):
@@ -410,7 +419,7 @@ def addSkillStat(task_id, task_time, date):
             skills_values = []
             for skill in used_skills.split(","):
                 name, p = skill.split(":")
-                skill_list.append(name)
+                skill_list.append(f"[{name}]")
                 skills_values.append(task_time * (p / 100))
             skill = ",".join(skill_list)
             skill_value = ",".join(skills_values)
@@ -418,5 +427,4 @@ def addSkillStat(task_id, task_time, date):
             return None
     else:
         return None
-
     saveMainData("skills_stats", [skill, date, skill_value, task_id])

@@ -28,19 +28,17 @@ class MainWindow(QMainWindow):
             cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, is_group INTEGER, showing_in_list INTEGER)")
             cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
             cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT, sections_position TEXT)")
-            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL, 'Shedule completing' INTEGER, 'Shedule completing accuracy' INTEGER)")
+            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL)")
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
             cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT)")
             cur.execute("CREATE TABLE Skills_statistics (date TEXT, task_ID TEXT)")
-            cur.execute("CREATE TABLE Tasks (name TEXT, used_skills TEXT, save INTEGER, busy INTEGER)")
+            cur.execute("CREATE TABLE Tasks (name TEXT, used_skills TEXT, busy INTEGER)")
             cur.execute("CREATE TABLE Plans (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT, busy INTEGER)")
 
             cur.execute("""INSERT INTO Graphs (name, value_type, color) VALUES ('Mental state', 'Letteric', '#FF0000'), 
                         ('Physical state', 'Letteric', '#F44336'), 
                         ('Work time', 'Numeric', '#FFD300'),
-                        ('Shedule completing', '%', '#143484'),
-                        ('Shedule completing accuracy', '%', '#009F65'),
-                        ('Day rate', 'Numeric', '00FFFF')""")
+                        ('Day rate', 'Numeric', '#00FFFF')""")
             conn.commit()
             conn.close()
         if not os.path.exists(other_db):
@@ -233,7 +231,8 @@ class MainWindow(QMainWindow):
         container.setLayout(main_v_box)
 
         self.create_toolbar()
-
+        if sys.argv[1] == "finish day":
+            self.form()
         self.stacked_widget.addWidget(container)
         #self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
 

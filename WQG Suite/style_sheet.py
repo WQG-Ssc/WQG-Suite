@@ -122,4 +122,7 @@ QTimeEdit{
     color: #FFD300;
     border: 1px solid #FFD300;
     }
+QPlainTextEdit{
+    color: white
+    }
 """

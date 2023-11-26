@@ -1,7 +1,7 @@
 import csv
 import statistics as stats
 import datetime as dt
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal, QDate
 from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor
 from WQG_Suite import user_config_path
@@ -414,7 +414,6 @@ class GoalTab(QWidget):
         note_text_edit = QPlainTextEdit()
         note_text_edit.setPlaceholderText("Add note...")
         note_text_edit.setFixedWidth(1000)
-        note_text_edit.setStyleSheet("color: white")
         note_text_edit.textChanged.connect(self.setSaveEnabled)
 
         goal_name_edit = QLineEdit()
@@ -1222,6 +1221,7 @@ class StatisticsTab(QWidget):
 class Form(QDialog):
     def __init__(self):
         super().__init__()
+        self.goals_with_dccs = []
         parser = configparser.ConfigParser()
         parser.read(r"Files\config\user.ini")
         self.FormFillingDate = parser.get("Data", "FormFillingDate")
@@ -1267,7 +1267,7 @@ class Form(QDialog):
             self.day_stats_edits = [m_state_line_edit, p_state_line_edit, day_rate_line_edit]
 
             change_label = QLabel("Change of dynamic characts")
-            change_list_widget = QListWidget()
+            self.change_list_widget = QListWidget()
             day_note = QPlainTextEdit()
             day_note.setPlaceholderText("How was your day?")
 
@@ -1279,43 +1279,17 @@ class Form(QDialog):
         
             for task in self.records_dict:
                 if len(task.split(".")) > 1:
-                    dynamic_ccs = []
-                    print(f"task:{task}")
-                    goal = list(DataManager.loadMainData("goal", task, one=True))
-                    goal_name = goal[1]
-                    ccs = goal[11]
-                    if ccs:
-                        ccs = ccs.split(",")
-                        dynamic_ccs = [item.split(":")[0] for item in ccs if DataManager.loadMainData("characteristic", item.split(":")[0], one=True)[0] == "dynamic"]
-                    print(f"dynamic_ccs:{dynamic_ccs}")
-                    widget = QWidget()
-                    h_box = QHBoxLayout()
-                    label = QLabel(goal_name)
-                    h_box.addWidget(label)
-                    for cc in dynamic_ccs:
-                        charact_label = QLabel(cc + ":")
-                        line_edit = QLineEdit()
-                        line_edit.setFixedWidth(20)
-                        if goal[0] in self.line_edit_dict:
-                            self.line_edit_dict[goal[0]].append(line_edit)
-                            self.goal_ccs_dict[goal[0]].append(cc)
-                        else:
-                            self.line_edit_dict[goal[0]] = [line_edit]
-                            self.goal_ccs_dict[goal[0]] = [cc]
-                        h_box.addWidget(charact_label)
-                        h_box.addWidget(line_edit)
-                
-                    h_box.addStretch()
-                    widget.setLayout(h_box)
-                    item = QListWidgetItem()
-                    item.setSizeHint(widget.sizeHint())
-                    change_list_widget.addItem(item)
-                    change_list_widget.setItemWidget(item, widget)
+                    self.add_goal_item(task)
 
             print(f"line_edit_dict{self.line_edit_dict}")
             print(f"goal_ccs_dict:{self.goal_ccs_dict}")
 
             self.day_plan_view = ws.WeekPlanView(QDate().currentDate(), False)
+            self.day_plan_view.changesMade.connect(self.check_plan)
+
+            self.time_label = QLabel()
+            self.time_label.setFont(QFont("Calibri", 14))
+            self.check_plan()
 
             grid = QGridLayout()
             grid.addWidget(m_state_label, 0, 0)
@@ -1328,18 +1302,59 @@ class Form(QDialog):
             v_box = QVBoxLayout()
             v_box.addWidget(today_label)
             v_box.addLayout(grid)
-            v_box.addWidget(change_list_widget)
+            v_box.addWidget(self.change_list_widget)
             v_box.addWidget(day_note)
             v_box.addWidget(ok_button)
 
+            plan_v_box = QVBoxLayout()
+            plan_v_box.addWidget(self.day_plan_view)
+            plan_v_box.addWidget(self.time_label)
+
             main_h_box = QHBoxLayout()
             main_h_box.addLayout(v_box)
-            main_h_box.addWidget(self.day_plan_view)
+            main_h_box.addLayout(plan_v_box)
 
             self.setLayout(main_h_box)
             self.show()
         else:
             QMessageBox.warning(self, "Form is already filled", "Form is already filled")
+
+    def add_goal_item(self, task):
+        if task not in self.goals_with_dccs:
+            dynamic_ccs = []
+            print(f"task:{task}")
+            goal = list(DataManager.loadMainData("goal", task, one=True))
+            goal_name = goal[1]
+            ccs = goal[11]
+            if ccs:
+                ccs = ccs.split(",")
+                dynamic_ccs = [item.split(":")[0] for item in ccs if DataManager.loadMainData("characteristic", item.split(":")[0], one=True)[0] == "dynamic"]
+            print(f"dynamic_ccs:{dynamic_ccs}")
+            if dynamic_ccs:
+                widget = QWidget()
+                h_box = QHBoxLayout()
+                label = QLabel(goal_name)
+                h_box.addWidget(label)
+                for cc in dynamic_ccs:
+                    charact_label = QLabel(cc + ":")
+                    line_edit = QLineEdit()
+                    line_edit.setFixedWidth(20)
+                    if goal[0] in self.line_edit_dict:
+                        self.line_edit_dict[goal[0]].append(line_edit)
+                        self.goal_ccs_dict[goal[0]].append(cc)
+                    else:
+                        self.line_edit_dict[goal[0]] = [line_edit]
+                        self.goal_ccs_dict[goal[0]] = [cc]
+                    h_box.addWidget(charact_label)
+                    h_box.addWidget(line_edit)
+                
+                h_box.addStretch()
+                widget.setLayout(h_box)
+                item = QListWidgetItem()
+                item.setSizeHint(widget.sizeHint())
+                self.change_list_widget.addItem(item)
+                self.change_list_widget.setItemWidget(item, widget)
+                self.goals_with_dccs.append(task)
 
     def save_day_data(self):
         day_stats = [item.text() for item in self.day_stats_edits if item.text() != ""]
@@ -1356,7 +1371,7 @@ class Form(QDialog):
                 busy = ws.getBusyValue(item.task_id)
                 DataManager.saveMainData("statistics", [item.start_time, item.end_time, item.task_id, self.current_date, busy])
 
-            DataManager.saveMainData("day", [self.current_date] + day_stats + [None, None, None])
+            DataManager.saveMainData("day", [self.current_date] + day_stats + [float(self.time_label.text().replace("Time: ", ""))])
             for goal_id in self.records_dict.keys():
                 if len(goal_id.split(".")) > 1:
                     needs_calc = False
@@ -1401,7 +1416,7 @@ class Form(QDialog):
                     print(f"cc_stats_str:{cc_stats_str}")
 
             for task_id in self.records_dict:
-                DataManager.addSkillStat(task_id, self.records_dict[task_id], self.current_date)
+                DataManager.addSkillStat(task_id, self.records_dict[task_id] / 3600000, self.current_date)
 
             DataManager.recalculateSkills()
             parser = configparser.ConfigParser()
@@ -1412,6 +1427,18 @@ class Form(QDialog):
             self.close()
         else: 
             QMessageBox.warning(self, "Fill all cells to save the form", "Fill all cells to save the form")
+
+    def check_plan(self):
+        time = 0
+        items = self.day_plan_view.scene.items()
+        for item in items:
+            if not isinstance(item, QGraphicsPixmapItem):
+                if len(item.task_id.split(".")) > 1:
+                    self.add_goal_item(item.task_id)
+                if ws.getBusyValue(item.task_id):
+                    time += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+        time /= 3600000
+        self.time_label.setText(f"Time: {time}")
 
 class StatisticsEditor(QDialog):
     def __init__(self):
@@ -1466,10 +1493,14 @@ class StatisticsEditor(QDialog):
         p_state_line_edit.setValidator(validator)
 
         regex = QRegularExpression("[1-9]|10")
-        validator = QRegularExpressionValidator(regex)
         day_rate_label = QLabel("Day rate:")
         day_rate_line_edit = QLineEdit()
-        day_rate_line_edit.setValidator(validator)
+        day_rate_line_edit.setValidator(QRegularExpressionValidator(regex))
+
+        work_time_edit = QLineEdit()
+        work_time_label = QLabel("Work time:")
+        regex = QRegularExpression("[0-9][0-9]*\.?[0-9]+$")
+        work_time_edit.setValidator(QRegularExpressionValidator(regex))
 
         grid2 = QGridLayout()
         grid2.addWidget(self.date_edit, 0, 0)
@@ -1479,7 +1510,9 @@ class StatisticsEditor(QDialog):
         grid2.addWidget(p_state_line_edit, 2, 1)
         grid2.addWidget(day_rate_label, 3, 0)
         grid2.addWidget(day_rate_line_edit, 3, 1)
-        self.second_tab_cells = [m_state_line_edit, p_state_line_edit, day_rate_line_edit]
+        grid2.addWidget(work_time_label, 4, 0)
+        grid2.addWidget(work_time_edit, 4, 1)
+        self.second_tab_cells = [m_state_line_edit, p_state_line_edit, day_rate_line_edit, work_time_edit]
 
         self.load_day(self.current_date)
 
@@ -1555,7 +1588,7 @@ class StatisticsEditor(QDialog):
                 self.characts_list.addedItemsText[charact] = line_edit
 
     def save_data(self):
-        #try:
+        try:
             success = None
             index = self.edit_mode.currentIndex()
             if index == 0 and self.goal_id:
@@ -1645,8 +1678,8 @@ class StatisticsEditor(QDialog):
                 QMessageBox.information(self, "Data has been written", "Data has been written")
             elif success == False:
                 QMessageBox.information(self, "An error occured", "Data has not been written")
-        #except Exception as error:
-        #    QMessageBox.critical(self, "An error occured", f"Error: {error}")
+        except Exception as error:
+            QMessageBox.critical(self, "An error occured", f"Error: {error}")
 
 class Plans(QWidget):
     changesSaved = pyqtSignal()

@@ -1056,247 +1056,6 @@ class CompleteGoalWindow(QWidget):
         self.painter.drawRect(0, 0, 1920, 1040)
         self.painter.end()
 
-class WeekPlanView(QGraphicsView):
-    switch_week_req = pyqtSignal(str, list)
-    changesMade = pyqtSignal()
-    def __init__(self, start_day, week_view=True):
-        super().__init__()
-        self.week_view = week_view
-        self.start_day = start_day
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
-        self.scene.selectionChanged.connect(self.highlight_items)
-        self.setStyleSheet("QScrollBar{width: 0px}")
-        self.setFixedHeight(864)
-        self.MSECSTOPIXS = 0.00001
-        self.switch_timer = QTimer()
-        self.switch_timer.setInterval(500)
-        self.switch_timer.setSingleShot(True)
-        #Variables for creating an item
-        self.creating_item = None
-        self.start_point = None
-        self.blocks_dict = {}
-        self.max_end_time = 86400000
-
-        self.delete_act = QAction("Delete block")
-        self.delete_act.triggered.connect(self.delete_block)
-        self.delete_act.setShortcut("delete")
-        self.copy_act = QAction("Copy block")
-        self.copy_act.triggered.connect(self.copy_block)
-        self.copy_act.setShortcut("Ctrl+C")
-        self.addActions([self.delete_act, self.copy_act])
-
-        if week_view:
-            self.scene.setSceneRect(0, 0, 1920, 864)
-            self.pixmap = QPixmap(r"Files\icons\week plan.png")
-        else:
-            self.scene.setSceneRect(0, 0, 256, 864)
-            self.pixmap = QPixmap(r"Files\icons\day plan.jpg")
-        background_item = self.scene.addPixmap(self.pixmap)
-        background_item.setPos(0, 0)
-        self.loadData()
-
-    def loadData(self, setItems=[]):
-        current_date = dt.date.today()
-        if self.blocks_dict:
-            self.blocks_dict.clear()
-        if self.week_view:
-            r = 7
-        else:
-            r = 1
-        for n in range(r):
-            day = self.start_day.toString("yyyy-MM-dd")
-            dtday = dt.date.fromisoformat(day)
-            if self.week_view:
-                if dtday < current_date:
-                    used_table = "stats"
-                elif dtday == current_date:
-                    parser = config.ConfigParser()
-                    parser.read(r"Files\config\user.ini")
-                    lastCompletedDay = parser.get("Data", "formfillingdate")
-                    if lastCompletedDay == current_date.strftime("%Y-%m-%d"):
-                        used_table = "stats"
-                    else:
-                        used_table = "plans"
-                elif dtday > current_date:
-                    used_table = "plans"
-            else:
-                used_table = "stats"
-
-            if used_table == "stats":
-                day_records = DataManager.loadMainData("day_stats", day)
-            else:
-                day_records = DataManager.loadMainData("plans", day)
-
-            if n not in self.blocks_dict:
-                self.blocks_dict[n] = []
-            prev_end_time = ""
-            prev_task_id = ""
-            prev_block_i = ""
-            for record in day_records:
-                start_time, end_time, task_id = record
-                current_block_i = len(self.blocks_dict[n])
-                
-                if prev_end_time:
-                    gap_time = calculate_msecs(start_time) - calculate_msecs(prev_end_time)
-                if prev_task_id == task_id and gap_time < 1800000 and used_table == "stats":
-                    current_block_i = prev_block_i
-                    block = self.blocks_dict[n][current_block_i]
-                    block.end_time = end_time
-                    block.gap_time += gap_time
-                    y1 = calculate_msecs(prev_end_time) * self.MSECSTOPIXS
-                    y2 = calculate_msecs(start_time) * self.MSECSTOPIXS - y1
-                    if gap_time:
-                        block.gap_periods.append([y1, y2])
-                else:
-                    time_block = TimeBlock(task_id, start_time, end_time, 0, n, self.blocks_dict, [], self.week_view, used_table)
-                    self.blocks_dict[n].append(time_block)
-                    time_block.object.switch_week_req.connect(self.switch_week)
-                    time_block.object.changes_made.connect(self.changes_made)
-                prev_end_time = end_time
-                prev_task_id = task_id
-                prev_block_i = current_block_i
-
-            self.start_day = self.start_day.addDays(1)
-
-        for blocks in self.blocks_dict.values():
-            for time_block in blocks:
-                time_block.updateBlockRect()
-                if time_block not in setItems:
-                    self.scene.addItem(time_block)
-        if setItems:
-            for item in setItems:
-                self.blocks_dict[item.day_index].append(item)
-    def addBlock(self, time_block):
-        time_block.updateBlockRect()
-        self.blocks_dict[time_block.day_index].append(time_block)
-        self.scene.addItem(time_block)
-
-    def removeBlock(self, time_block):
-        self.blocks_dict[time_block.day_index].remove(time_block)
-        self.scene.removeItem(time_block)
-
-    def mouseMoveEvent(self, event):
-        x = event.pos().x()
-        y = event.pos().y()
-        pos = event.pos()
-        if x > 112 and y <= 865:
-            if self.start_point:
-                if not self.creating_item and y - self.start_point.y() > 9:
-                    if self.week_view:
-                        day_index = int((x - 112) // 258)
-                    else:
-                        day_index = 0
-                    start_time = math.ceil((self.start_point.y() // 9) * 9 / self.MSECSTOPIXS)
-
-                    if self.blocks_dict[day_index]:
-                        for block in self.blocks_dict[day_index]:
-                            block_start_time = calculate_msecs(block.start_time)
-                            if block_start_time > start_time and block_start_time < self.max_end_time:
-                                self.max_end_time = block_start_time
-                    else:
-                        self.max_end_time = 86400000
-
-                    if self.max_end_time - start_time > 900000: #Means there's enough space for the creating item (>= 15 mins)
-                        self.creating_item = TimeBlock("", to_str(start_time), to_str(math.ceil((y // 9) * 9 / self.MSECSTOPIXS)), 0, day_index, self.blocks_dict, [], self.week_view)
-                        self.creating_item.updateBlockRect()
-                        self.scene.addItem(self.creating_item)
-                elif self.creating_item:
-                    end_time = math.ceil((y // 9) * 9 / self.MSECSTOPIXS)
-                    if end_time <= self.max_end_time and end_time >= calculate_msecs(self.creating_item.start_time):
-                        self.creating_item.end_time = to_str(end_time)
-                        self.creating_item.prepareGeometryChange()
-                        self.creating_item.updateBlockRect()
-            else:
-                if isinstance(self.itemAt(x, y), QGraphicsPixmapItem) and not self.scene.mouseGrabberItem():
-                    self.start_point = pos
-        return super().mouseMoveEvent(event)
-
-    def mousePressEvent(self, event):
-        print(f"block_dict:{self.blocks_dict}")
-        return super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if self.creating_item:
-            if self.creating_item.block_rect[2]:
-                self.blocks_dict[self.creating_item.day_index].append(self.creating_item)
-                self.creating_item.object.switch_week_req.connect(self.switch_week)
-                self.creating_item.object.changes_made.connect(self.changes_made)
-        self.creating_item = None
-        self.start_point = None
-        self.max_end_time = 86400000
-        return super().mouseReleaseEvent(event)
-
-    def contextMenuEvent(self, event):
-        pos = event.pos()
-        if isinstance(self.itemAt(pos), TimeBlock):
-            item = self.itemAt(pos)
-            item.setSelected(True)
-            self.menu = QMenu()
-            self.menu.addAction(self.delete_act)
-            self.menu.addAction(self.copy_act)
-            self.menu.exec(self.mapToGlobal(pos))
-
-        return super().contextMenuEvent(event)
-    
-    def mouseDoubleClickEvent(self, event):
-        if isinstance(self.itemAt(event.pos()), TimeBlock):
-            item = self.scene.selectedItems()
-            if len(item) == 1 and item[0].used_table != "stats":
-                item = item[0]
-                self.scene.clearSelection()
-                self.dialog = TimeBlockDialog(item)
-
-    def delete_block(self):
-        for item in self.scene.selectedItems():
-            if item.used_table != "stats" or not item.week:
-                self.removeBlock(item)
-        self.changesMade.emit()
-
-    def copy_block(self):
-        copied_blocks = []
-        for block in self.scene.selectedItems():
-            if block.used_table != "stats" or not block.week:
-                item_copy = TimeBlock(block.task_id, block.start_time, block.end_time, block.gap_time, block.day_index, self.blocks_dict, [], self.week_view)
-                item_copy.object.changes_made.connect(self.changesMade)
-                item_copy.object.switch_week_req.connect(self.switch_week)
-                item_copy.updateBlockRect()
-                self.addBlock(item_copy)
-                copied_blocks.append(item_copy)
-        if copied_blocks:
-            self.scene.clearSelection()
-            for block in copied_blocks:
-                block.setSelected(True)
-            self.changesMade.emit()
-            
-    def highlight_items(self):
-        selected_items = self.scene.selectedItems()
-        items = self.scene.items()
-        for item in items:
-            if isinstance(item, TimeBlock):
-                if item in selected_items:
-                    item.highlight()
-                else:
-                    item.dehighlight()
-
-    def changeWeek(self, new_start_day, exceptItems):
-        self.start_day = new_start_day
-        print(f"\n\nexcept:{exceptItems}")
-        for item in self.scene.items():
-            if item not in exceptItems and isinstance(item, TimeBlock):
-                self.scene.removeItem(item)
-        self.loadData(exceptItems)
-
-    def switch_week(self, mode):
-        if not self.switch_timer.isActive() and self.week_view:
-            self.switch_timer.start()
-            items = self.scene.selectedItems()
-            self.switch_week_req.emit(mode, items)
-            self.changesMade.emit()
-
-    def changes_made(self):
-        self.changesMade.emit()
-
 class Object(QObject):
     switch_week_req = pyqtSignal(str)
     changes_made = pyqtSignal()
@@ -1304,7 +1063,7 @@ class Object(QObject):
         super().__init__()
 
 class TimeBlock(QGraphicsItem):
-    def __init__(self, task_id, start_time, end_time, gap_time, day_index, blocks_dict, gap_periods, week, used_table=""):
+    def __init__(self, task_id, start_time, end_time, gap_time, day_index, blocks_dict, gap_periods, week, used_table="", inPlan=False):
         super().__init__()
         self.object = Object()
         self.updateTaskID(task_id)
@@ -1315,7 +1074,9 @@ class TimeBlock(QGraphicsItem):
         self.block_dict = blocks_dict
         self.gap_periods = gap_periods
         self.used_table = used_table
+        self.brush = QBrush(QColor("#FFD300"))
         self.week = week
+        self.inPlan = inPlan
         self.pen = None
         self.prev_x = 0
         self.prev_y = 0
@@ -1364,7 +1125,7 @@ class TimeBlock(QGraphicsItem):
         if self.pen:
             painter.setPen(self.pen)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(QColor("#FFD300")))
+        painter.setBrush(self.brush)
         painter.drawRoundedRect(self.block_rect[0], self.block_rect[1], self.width, self.block_rect[2], 15, 15)
         if self.gap_periods:
             painter.setPen(QPen(QColor("#AAAAAA")))
@@ -1419,6 +1180,13 @@ class TimeBlock(QGraphicsItem):
         else:
             self.setToolTip(f"{self.name} {period} {time}")
 
+        if self.inPlan:
+            if self.block_rect[2] < 54:
+                metrics = QFontMetrics(QFont("Calibri", 10))
+                painter.drawPixmap(metrics.horizontalAdvance(period) + metrics.horizontalAdvance(self.name) + 5, self.block_rect[1], 15, 7, QPixmap(r"Files\icons\start task small.png" ))
+            else:
+                painter.drawPixmap(10, self.block_rect[1] + 25, 23, 23, QPixmap("Files\icons\start task.png"))
+
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             x = value.x()
@@ -1430,8 +1198,9 @@ class TimeBlock(QGraphicsItem):
                 self.object.switch_week_req.emit("previous")
                 x = -1 * self.block_rect[0]
             if block_x >= 1660:
-                self.object.switch_week_req.emit("next")
                 x = 1660 - self.block_rect[0]
+                if block_x > 1800:
+                    self.object.switch_week_req.emit("next")
             if block_y <= 0:
                 y = -1 * self.block_rect[1]
             if block_y + self.block_rect[2] > 864:
@@ -1495,11 +1264,278 @@ class TimeBlock(QGraphicsItem):
         self.setZValue(0)
         self.update()
 
+    def setCompleted(self):
+        self.brush = QBrush(QColor("#AAAAAA"))
+        self.used_table = "stats"#To make the block unabled
+        self.setEnabled(False)
+        self.update()
+
+class WeekPlanView(QGraphicsView):
+    switch_week_req = pyqtSignal(str, list)
+    changesMade = pyqtSignal()
+    startTask = pyqtSignal(TimeBlock)
+    def __init__(self, start_day, week_view=True, inTimeManager=False):
+        super().__init__()
+        self.week_view = week_view
+        self.inTimeManager = inTimeManager
+        self.start_day = start_day
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+        self.scene.selectionChanged.connect(self.highlight_items)
+        self.setStyleSheet("QScrollBar{width: 0px}")
+        self.setFixedHeight(864)
+        self.MSECSTOPIXS = 0.00001
+        self.switch_timer = QTimer()
+        self.switch_timer.setInterval(500)
+        self.switch_timer.setSingleShot(True)
+        #Variables for creating an item
+        self.creating_item = None
+        self.start_point = None
+        self.blocks_dict = {}
+        self.max_end_time = 86400000
+
+        self.delete_act = QAction("Delete block")
+        self.delete_act.triggered.connect(self.delete_block)
+        self.delete_act.setShortcut("delete")
+        self.copy_act = QAction("Copy block")
+        self.copy_act.triggered.connect(self.copy_block)
+        self.copy_act.setShortcut("Ctrl+C")
+        self.addActions([self.delete_act, self.copy_act])
+
+        if week_view:
+            self.scene.setSceneRect(0, 0, 1920, 864)
+            self.pixmap = QPixmap(r"Files\icons\week plan.png")
+        else:
+            self.scene.setSceneRect(0, 0, 256, 864)
+            self.pixmap = QPixmap(r"Files\icons\day plan.jpg")
+        background_item = self.scene.addPixmap(self.pixmap)
+        background_item.setPos(0, 0)
+        self.loadData()
+
+    def loadData(self, setItems=[]):
+        current_date = dt.date.today()
+        if self.blocks_dict:
+            self.blocks_dict.clear()
+        if self.week_view:
+            r = 7
+        else:
+            r = 1
+        for n in range(r):
+            day = self.start_day.toString("yyyy-MM-dd")
+            dtday = dt.date.fromisoformat(day)
+            if self.inTimeManager:
+                used_table = "plans"
+            elif self.week_view:
+                if dtday < current_date:
+                    used_table = "stats"
+                elif dtday == current_date:
+                    parser = config.ConfigParser()
+                    parser.read(r"Files\config\user.ini")
+                    lastCompletedDay = parser.get("Data", "formfillingdate")
+                    if lastCompletedDay == current_date.strftime("%Y-%m-%d"):
+                        used_table = "stats"
+                    else:
+                        used_table = "plans"
+                elif dtday > current_date:
+                    used_table = "plans"
+            else:
+                used_table = "stats"
+
+            if used_table == "stats":
+                day_records = DataManager.loadMainData("day_stats", day)
+            else:
+                day_records = DataManager.loadMainData("plans", day)
+
+            if n not in self.blocks_dict:
+                self.blocks_dict[n] = []
+            prev_end_time = ""
+            prev_task_id = ""
+            prev_block_i = ""
+            for record in day_records:
+                start_time, end_time, task_id = record
+                current_block_i = len(self.blocks_dict[n])
+                
+                if prev_end_time:
+                    gap_time = calculate_msecs(start_time) - calculate_msecs(prev_end_time)
+                if prev_task_id == task_id and gap_time < 1800000 and used_table == "stats":
+                    current_block_i = prev_block_i
+                    block = self.blocks_dict[n][current_block_i]
+                    block.end_time = end_time
+                    block.gap_time += gap_time
+                    y1 = calculate_msecs(prev_end_time) * self.MSECSTOPIXS
+                    y2 = calculate_msecs(start_time) * self.MSECSTOPIXS - y1
+                    if gap_time:
+                        block.gap_periods.append([y1, y2])
+                else:
+                    time_block = TimeBlock(task_id, start_time, end_time, 0, n, self.blocks_dict, [], self.week_view, used_table, inPlan=self.inTimeManager)
+                    self.blocks_dict[n].append(time_block)
+                    time_block.object.switch_week_req.connect(self.switch_week)
+                    time_block.object.changes_made.connect(self.changes_made)
+                prev_end_time = end_time
+                prev_task_id = task_id
+                prev_block_i = current_block_i
+
+            self.start_day = self.start_day.addDays(1)
+
+        for blocks in self.blocks_dict.values():
+            for time_block in blocks:
+                time_block.updateBlockRect()
+                if time_block not in setItems:
+                    self.scene.addItem(time_block)
+        if setItems:
+            for item in setItems:
+                self.blocks_dict[item.day_index].append(item)
+    def addBlock(self, time_block):
+        time_block.updateBlockRect()
+        self.blocks_dict[time_block.day_index].append(time_block)
+        self.scene.addItem(time_block)
+
+    def removeBlock(self, time_block):
+        self.blocks_dict[time_block.day_index].remove(time_block)
+        self.scene.removeItem(time_block)
+
+    def mouseMoveEvent(self, event):
+        pos = self.mapToScene(event.pos())
+        x = pos.x()
+        y = pos.y()
+        if x > 112 and y <= 865:
+            if self.start_point:
+                if not self.creating_item and y - self.start_point.y() > 9:
+                    if self.week_view:
+                        day_index = int((x - 112) // 258)
+                    else:
+                        day_index = 0
+                    start_time = math.ceil((self.start_point.y() // 9) * 9 / self.MSECSTOPIXS)
+
+                    if self.blocks_dict[day_index]:
+                        for block in self.blocks_dict[day_index]:
+                            block_start_time = calculate_msecs(block.start_time)
+                            if block_start_time > start_time and block_start_time < self.max_end_time:
+                                self.max_end_time = block_start_time
+                    else:
+                        self.max_end_time = 86400000
+
+                    if self.max_end_time - start_time > 900000: #Means there's enough space for the creating item (>= 15 mins)
+                        self.creating_item = TimeBlock("", to_str(start_time), to_str(math.ceil((y // 9) * 9 / self.MSECSTOPIXS)), 0, day_index, self.blocks_dict, [], self.week_view, inPlan=self.inTimeManager)
+                        self.creating_item.updateBlockRect()
+                        self.scene.addItem(self.creating_item)
+                elif self.creating_item:
+                    end_time = math.ceil((y // 9) * 9 / self.MSECSTOPIXS)
+                    if end_time <= self.max_end_time and end_time >= calculate_msecs(self.creating_item.start_time):
+                        self.creating_item.end_time = to_str(end_time)
+                        self.creating_item.prepareGeometryChange()
+                        self.creating_item.updateBlockRect()
+            else:
+                if isinstance(self.itemAt(event.pos()), QGraphicsPixmapItem) and not self.scene.mouseGrabberItem():
+                    self.start_point = pos
+        return super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.inTimeManager:
+            mapped = self.mapToScene(event.pos())
+            pos = QPoint(mapped.x(), mapped.y())
+            item = self.itemAt(event.pos())
+            if isinstance(item, TimeBlock):
+                start_msecs = calculate_msecs(item.start_time)
+                y = pos.y() - start_msecs * 0.00001
+                x = pos.x()
+                print(f"y:{y}")
+                if (calculate_msecs(item.end_time) - calculate_msecs(item.start_time)) * 0.00001 >= 54:
+                    if y >= 25 and y <= 48 and x >= 10 and x <= 33 and item.isEnabled():
+                        self.startTask.emit(item)
+                else:
+                    period = item.start_time[:-3] + "-" + item.end_time[:-3]
+                    metrics = QFontMetrics(QFont("Calibri", 10))
+                    if y <= 7 and x >= metrics.horizontalAdvance(period) + metrics.horizontalAdvance(item.name) + 5 and x <= metrics.horizontalAdvance(period) + metrics.horizontalAdvance(item.name) + 8:
+                        self.startTask.emit(item)
+        return super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.creating_item:
+            if self.creating_item.block_rect[2]:
+                self.blocks_dict[self.creating_item.day_index].append(self.creating_item)
+                self.creating_item.object.switch_week_req.connect(self.switch_week)
+                self.creating_item.object.changes_made.connect(self.changes_made)
+        self.creating_item = None
+        self.start_point = None
+        self.max_end_time = 86400000
+        return super().mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event):
+        pos = event.pos()
+        if isinstance(self.itemAt(pos), TimeBlock):
+            item = self.itemAt(pos)
+            item.setSelected(True)
+            self.menu = QMenu()
+            self.menu.addAction(self.delete_act)
+            self.menu.addAction(self.copy_act)
+            self.menu.exec(self.mapToGlobal(pos))
+        return super().contextMenuEvent(event)
+    
+    def mouseDoubleClickEvent(self, event):
+        if isinstance(self.itemAt(event.pos()), TimeBlock):
+            item = self.scene.selectedItems()
+            if len(item) == 1 and (item[0].used_table != "stats" or not self.week_view):
+                item = item[0]
+                self.scene.clearSelection()
+                self.dialog = TimeBlockDialog(item)
+
+    def delete_block(self):
+        for item in self.scene.selectedItems():
+            if item.used_table != "stats" or not item.week:
+                self.removeBlock(item)
+        self.changesMade.emit()
+
+    def copy_block(self):
+        copied_blocks = []
+        for block in self.scene.selectedItems():
+            if block.used_table != "stats" or not block.week:
+                item_copy = TimeBlock(block.task_id, block.start_time, block.end_time, block.gap_time, block.day_index, self.blocks_dict, [], self.week_view, inPlan=self.inTimeManager)
+                item_copy.object.changes_made.connect(self.changesMade)
+                item_copy.object.switch_week_req.connect(self.switch_week)
+                item_copy.updateBlockRect()
+                self.addBlock(item_copy)
+                copied_blocks.append(item_copy)
+        if copied_blocks:
+            self.scene.clearSelection()
+            for block in copied_blocks:
+                block.setSelected(True)
+            self.changesMade.emit()
+            
+    def highlight_items(self):
+        selected_items = self.scene.selectedItems()
+        items = self.scene.items()
+        for item in items:
+            if isinstance(item, TimeBlock):
+                if item in selected_items:
+                    item.highlight()
+                else:
+                    item.dehighlight()
+
+    def changeWeek(self, new_start_day, exceptItems):
+        self.start_day = new_start_day
+        print(f"\n\nexcept:{exceptItems}")
+        for item in self.scene.items():
+            if item not in exceptItems and isinstance(item, TimeBlock):
+                self.scene.removeItem(item)
+        self.loadData(exceptItems)
+
+    def switch_week(self, mode):
+        if not self.switch_timer.isActive() and self.week_view:
+            self.switch_timer.start()
+            items = self.scene.selectedItems()
+            self.switch_week_req.emit(mode, items)
+            self.changesMade.emit()
+
+    def changes_made(self):
+        self.changesMade.emit()
+
 class TimeBlockDialog(QDialog):
     def __init__(self, time_block):
         super().__init__()
         self.setModal(True)
         self.setWindowTitle("Block settings")
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.goal_id = ""
         self.time_block = time_block
         self.from_te = QTimeEdit()
@@ -1526,13 +1562,10 @@ class TimeBlockDialog(QDialog):
         self.button_group.addButton(time_rb)
         self.button_group.buttonToggled.connect(self.toggle_mode)
 
-        self.save_checkbox = QCheckBox("Save (for tasks)")
-        self.busy_checkbox = QCheckBox("Busy (for tasks)")
-        self.skill_edit = QLineEdit()
-        self.skills_list = SkillCharactListWidget()
-        self.skills_list.setToolTip("Add used skills (give values in percentages)")
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.set_time_block)
+        self.task_settings_button = QPushButton("Create or set a task")
+        self.task_settings_button.clicked.connect(self.tasks_settings)
 
         time_h_box = QHBoxLayout()
         time_h_box.addWidget(self.from_te)
@@ -1548,19 +1581,14 @@ class TimeBlockDialog(QDialog):
         v_box.addWidget(goal_rb)
         v_box.addWidget(task_rb)
         v_box.addWidget(time_rb)
-        v_box.addWidget(self.save_checkbox)
-        v_box.addWidget(self.busy_checkbox)
-        v_box.addWidget(self.skill_edit)
-        v_box.addWidget(self.skills_list)
         v_box.addWidget(ok_button)
+        v_box.addWidget(self.task_settings_button)
         v_box.addStretch()
         self.setLayout(v_box)
         self.object_manager = ObjectManager(self, self.line_edit, ["Goals", "Skills", "Tasks"])
         self.object_manager.selected.connect(self.select_goal)
         self.object_manager.h = 140
-        self.skill_om = ObjectManager(self, self.skill_edit, ["Skills"])
-        self.skill_om.selected.connect(self.add_skill)
-        self.skill_om.h = 100
+        goal_rb.setChecked(True)#default value
         task = self.time_block.task_id.split(":")
         self.line_edit.blockSignals(True)
         if len(task) > 1:
@@ -1570,13 +1598,75 @@ class TimeBlockDialog(QDialog):
             self.line_edit.setText(task[1])
             if task[0] == "s": task_type = "Skills"
             elif task[0] == "t": task_type = "Tasks"
+            else: task_type = "Time name"
             self.select_goal(task[1], "", task_type)
-        else: 
+        elif len(self.time_block.task_id.split(".")) > 1: 
             goal_rb.setChecked(True)
-            self.line_edit.setText(task[0])
+            goal = DataManager.loadMainData("goal", task[0], one=True)
+            self.line_edit.setText(goal[1])
             self.select_goal("", task[0], "Goals")
         self.line_edit.blockSignals(False)
         self.show()
+
+    def tasks_settings(self):
+        self.dialog = QDialog()
+        self.dialog.setModal(True)
+        self.task_line_edit = QLineEdit()
+        self.task_line_edit.setPlaceholderText("Enter task name")
+        self.skills_list = SkillCharactListWidget()
+        self.skills_list.addedItemsText = []
+        self.skills_list.setToolTip("Add used skills (give values in percentages)")
+        self.skills_list.setVisible(False)
+        self.busy_checkbox = QCheckBox("Busy")
+        self.busy_checkbox.toggled.connect(self.toggle_skills_list)
+        self.skill_edit = QLineEdit()
+        self.skill_edit.setPlaceholderText("Select a skill")
+        self.skill_edit.setVisible(False)
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.save_task_settings)
+
+        if self.object_manager.isSelected:
+            task_name = self.line_edit.text()
+            self.task_line_edit.setText(task_name)
+            self.task_line_edit.setEnabled(False)
+            task = DataManager.loadMainData("task", task_name, one=True)
+            if task[1]:
+                for skill in task[0].split(","):
+                    name, value = skill.split(":")
+                    self.add_skill(name, value)
+                self.busy_checkbox.setChecked(True)
+
+        v_box = QVBoxLayout()
+        v_box.addWidget(self.task_line_edit)
+        v_box.addWidget(self.skill_edit)
+        v_box.addWidget(self.skills_list)
+        v_box.addWidget(self.busy_checkbox)
+        v_box.addWidget(ok_button)
+        v_box.addStretch()
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
+        self.skill_om = ObjectManager(self.dialog, self.skill_edit, ["Skills"])
+        self.skill_om.selected.connect(self.add_skill)
+
+    def save_task_settings(self):
+        used_skills = ""
+        if self.task_line_edit.text():
+            if self.busy_checkbox.isChecked():
+                for i in range(self.skills_list.count()):
+                    widget = self.skills_list.itemWidget(self.skills_list.item(i))
+                    skill = widget.name
+                    value = widget.value_edit.text()
+                    if not value:
+                        return QMessageBox.warning(self, "Fill all values of skills", "Fill all values of skills")
+                    used_skills += skill + ":" + value + ","
+                    used_skills = used_skills.rstrip(",")
+                if not used_skills:
+                    return QMessageBox.warning(self, "Empty skill list", "Tasks marked as 'busy' must have defined used skills")
+            busy = int(self.busy_checkbox.isChecked())
+            DataManager.saveMainData("task", [used_skills, busy, self.task_line_edit.text()])
+            self.line_edit.setText(self.task_line_edit.text())
+            self.object_manager.isSelected = True
+        self.dialog.close()
 
     def update_time(self):
         start_time = calculate_msecs(self.from_te.time().toString("hh:mm:ss"))
@@ -1593,74 +1683,51 @@ class TimeBlockDialog(QDialog):
             widget.delete_button.clicked.connect(lambda: self.remove_skill(item))
             self.skills_list.addItem(item)
             self.skills_list.setItemWidget(item, widget)
-
-    def mousePressEvent(self, event):
-        print(self.object_manager.s_filter)
-        print(self.object_manager.data)
+            self.skills_list.addedItemsText.append(text)
 
     def remove_skill(self, item):
-        self.skills_list.removeItem(item)
-
+        self.skills_list.addedItemsText.remove(self.skills_list.itemWidget(item).name)
+        self.skills_list.takeItem(self.skills_list.row(item))
+        
     def select_goal(self, text, goal_id, obj_type):
         if obj_type == "Goals":
             self.goal_id = goal_id
         else:
             self.goal_id = ""
-            if obj_type == "Tasks":
-                task = DataManager.loadMainData("task", text, one=True)
-                if task:
-                    for skill in task[0].split(","):
-                        name, value = skill.split(":")
-                        self.add_skill(name, value)
-                    self.save_checkbox.setChecked(bool(task[1]))
-                    self.busy_checkbox.setChecked(bool(task[2]))
 
     def toggle_mode(self, button):
         if button.text() != "Task":
-            self.save_checkbox.setEnabled(False)
-            self.busy_checkbox.setEnabled(False)
-            self.skill_edit.setVisible(False)
-            self.skills_list.setVisible(False)
+            self.task_settings_button.setVisible(False)
 
         if button.text() == "Goal/skill":
             self.object_manager.setFilter(["Goals", "Skills"])
-        elif button.text() == "Task":
-            self.save_checkbox.setChecked(False)
-            self.save_checkbox.setEnabled(True)
-            self.busy_checkbox.setChecked(False)
-            self.busy_checkbox.setEnabled(True)
-            self.skill_edit.setVisible(True)
-            self.skills_list.setVisible(True)
-            self.object_manager.setFilter(["Tasks"])
-        else:
+        elif button.text() == "Time name":
             self.object_manager.setFilter([""])
+        else:
+            self.object_manager.setFilter(["Tasks"])
+            self.task_settings_button.setVisible(True)
         self.line_edit.clear()
         self.goal_id = ""
 
-    def set_time_block(self):
-        button = self.button_group.checkedButton()
-        if button.text() == "Goal/skill":
-            if self.goal_id:
-                self.time_block.updateTaskID(self.goal_id)
-            else:
-                self.time_block.updateTaskID("s:" + self.line_edit.text())
-        elif button.text() == "Task":
-            self.time_block.updateTaskID("t:" + self.line_edit.text())
-            used_skills = ""
+    def toggle_skills_list(self, state):
+        self.skills_list.setVisible(state)
+        self.skill_edit.setVisible(state)
 
-            for i in range(self.skills_list.count()):
-                widget = self.skills_list.itemWidget(self.skills_list.item(i))
-                skill = widget.name
-                value = widget.value_edit.text()
-                if not value:
-                    return QMessageBox.warning(self, "Fill all values of skills", "Fill all values of skills")
-                used_skills += skill + ":" + value + ","
-            used_skills = used_skills.rstrip(",")
-            saveAfterCompleting = int(self.save_checkbox.isChecked())
-            busy = int(self.busy_checkbox.isChecked())
-            DataManager.saveMainData("task", [used_skills, saveAfterCompleting, busy, self.line_edit.text()])
+    def set_time_block(self):
+        print(self.object_manager.isSelected)
+        if self.line_edit.text():
+            button = self.button_group.checkedButton()
+            if button.text() == "Goal/skill" and self.object_manager.isSelected:
+                if self.goal_id:
+                    self.time_block.updateTaskID(self.goal_id)
+                else:
+                    self.time_block.updateTaskID("s:" + self.line_edit.text())
+            elif button.text() == "Task" and self.object_manager.isSelected:
+                self.time_block.updateTaskID("t:" + self.line_edit.text())
+            elif button.text() == "Time name":
+                self.time_block.updateTaskID("n:" + self.line_edit.text())
         else:
-            self.time_block.updateTaskID("n:" + self.line_edit.text())
+            self.time_block.updateTaskID("")
 
         start_time = self.from_te.time().toString("hh:mm:ss")
         end_time = self.to_te.time().toString("hh:mm:ss")
@@ -1740,9 +1807,9 @@ def calculate_progress(progress, time, characts):#Calculates progress of a goal 
 def getBusyValue(task_id):
     task = task_id.split(":")
     if len(task) > 1:
-        if task[1] == "t":
+        if task[0] == "t":
             busy = DataManager.loadMainData("task", task[1], one=True)[2]
-        elif task[1] == "n":
+        elif task[0] == "n":
             busy = 0
         else:
             busy = 1
