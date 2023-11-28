@@ -318,7 +318,7 @@ class MainWindow(QMainWindow):
         complete_day_button = QPushButton("Finish day")
         complete_day_button.setObjectName("YellowWhite")
         complete_day_button.setFont(QFont('Calibri', 12, 700))
-        complete_day_button.clicked.connect(self.complete_day)
+        complete_day_button.clicked.connect(self.finish_day)
         save_plan_button = QPushButton("Save plan")
         save_plan_button.setObjectName("YellowWhite")
         save_plan_button.setFont(QFont('Calibri', 12, 700))
@@ -377,7 +377,7 @@ class MainWindow(QMainWindow):
                 print(f"busy:{busy}")
                 DataManager.saveMainData("Plans", [item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
 
-    def complete_day(self):
+    def finish_day(self):
         subprocess.Popen("WQG's Suite.exe", "finish day")
 
     def start_task(self, time_block):

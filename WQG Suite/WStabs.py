@@ -3,7 +3,7 @@ import statistics as stats
 import datetime as dt
 from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal, QDate
-from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor
+from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor, QFontMetrics
 from WQG_Suite import user_config_path
 import plotly.graph_objs as go
 import WSwidgets as ws
@@ -255,6 +255,8 @@ class GoalsTab(QWidget):
         self.tree_widget.setHeaderLabels(self.headers)
         self.header = self.tree_widget.header()
         self.header.sectionMoved.connect(self.section_moved)
+        font18b = QFont("Calibri", 18, 700)
+        font18 = QFont("Calibri", 18)
 
         self.tree_widget.clear()
         goals = DataManager.loadMainData("goals", self.current_branch_id)
@@ -277,10 +279,10 @@ class GoalsTab(QWidget):
 
                 goal_item = QTreeWidgetItem(self.tree_widget, [""] + goal_info_list)
                 goal_item.setSizeHint(1, QSize(100, 120))
-                goal_item.setFont(1, QFont("Calibri", 18, 700))
-                for i in range(2, 8 + len(self.ccs)):#Потом последние значение будет получатся по кол-ву характеристик
-                    goal_item.setFont(i, QFont("Calibri", 18))
-                goal_item.setIcon(0, QIcon(ws.getGoalImage(goal_info[7].split(",")[0], ws.calculate_progress(goal_info[8], goal_info[1], goal_info[9]), goal_info[1]))) #Так мы получаем первое изображение из списка путей, которое является главным
+                goal_item.setFont(1, font18b)
+                for i in range(2, 8 + len(self.ccs)):
+                    goal_item.setFont(i, font18)
+                goal_item.setIcon(0, QIcon(ws.getGoalImage(goal_info[7].split(",")[0], ws.calculate_progress(goal_info[8], goal_info[1], goal_info[9], goal_info[5]), goal_info[1]))) #Так мы получаем первое изображение из списка путей, которое является главным
                 self.tree_widget.addTopLevelItem(goal_item)
         self.tree_widget.resizeColumnToContents(5)
 
@@ -516,7 +518,7 @@ class GoalTab(QWidget):
                 isMain = True
             else:
                 isMain = False
-            goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], ws.calculate_progress(goal[2], goal[3], goal[4]), isMain, goal[5], goal[6])
+            goal_tree_item = ws.GoalTreeItem(goal[0], goal[1], goal[3], ws.calculate_progress(goal[2], goal[3], goal[4], goal[6]), isMain, goal[5], goal[6])
             goal_tree_item.subgoalAdded.connect(self.add_subgoal)
             goal_tree_item.goalDeleted.connect(self.delete_goal)
 
@@ -1829,3 +1831,218 @@ class Plans(QWidget):
     def saveData(self):
         if QMessageBox.question(self, "Unsaved changes", "Some changes were made. Save changes?") == QMessageBox.StandardButton.Yes:
             self.save_plan()
+
+class PhrasesEditor(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Edit phrases and authors")
+        self.setMinimumHeight(350)
+        label = QLabel("Edit phrases and authors")
+        label.setFont(QFont("Calibri", 20))
+        edit_authors_button = QPushButton()
+        edit_authors_button.setFixedSize(20, 20)
+        edit_authors_button.setIcon(QIcon(i_dir + r"\add icon black"))
+        edit_authors_button.clicked.connect(self.edit_authors)
+        self.date_checkbox = QCheckBox()
+        self.date_checkbox.toggled.connect(self.toggle_date_edit)
+        self.date_edit = ws.DateEditTool()
+        self.toggle_date_edit(False)
+        self.author_edit = QLineEdit()
+        self.author_edit.setFixedWidth(100)
+        self.phrase_edit = QLineEdit()
+        self.phrase_edit.setFixedWidth(200)
+        add_phrase_button = QPushButton()
+        add_phrase_button.setIcon(QIcon(i_dir + r"\Arrow Right.png"))
+        add_phrase_button.setFixedSize(20, 20)
+        add_phrase_button.clicked.connect(self.add_phrase)
+        delete_button = QPushButton("Delete phrase")
+        delete_button.clicked.connect(self.delete_phrase)
+        ok_button = QPushButton("OK")
+        ok_button.setFixedWidth(20)
+        ok_button.clicked.connect(self.close)
+
+        h_box = QHBoxLayout()
+        h_box.addWidget(edit_authors_button)
+        h_box.addWidget(self.date_checkbox)
+        h_box.addWidget(self.date_edit)
+        h_box.addWidget(self.author_edit)
+        h_box.addWidget(self.phrase_edit)
+        h_box.addWidget(add_phrase_button)
+
+        v_box = QVBoxLayout()
+        v_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addSpacing(20)
+        v_box.addLayout(h_box)
+        v_box.addStretch()
+        v_box.addWidget(delete_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.setLayout(v_box)
+        self.show()
+        self.authors_om = ws.ObjectManager(self, self.author_edit, ["Authors"])
+        self.phrases_om = ws.ObjectManager(self, self.phrase_edit, ["Phrases"])
+        self.phrases_om.selected.connect(self.phrase_selected)
+
+    def edit_authors(self):
+        self.dialog1 = QDialog()
+        self.dialog1.setModal(True)
+        self.dialog1.setWindowTitle("Edit authors")
+        self.author_image = ws.AddImageLabel(ring=True)
+        self.name_edit = QLineEdit()
+        self.dialog1.setFixedSize(200, 250)
+        delete_button = QPushButton("Delete author")
+        delete_button.clicked.connect(self.delete_author)
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.save_author)
+        v_box = QVBoxLayout()
+        v_box.addWidget(self.author_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(self.name_edit)
+        v_box.addStretch()
+        v_box.addWidget(delete_button)
+        v_box.addWidget(ok_button)
+        self.dialog1.setLayout(v_box)
+        self.dialog1.show()
+        self.authors_om1 = ws.ObjectManager(self.dialog1, self.name_edit, ["Authors"])
+        self.authors_om1.selected.connect(self.show_author_image)
+        self.authors_om1.h = 100
+
+    def show_author_image(self, text, *args):
+        image = DataManager.loadOtherData("author", text, one=True)[0]
+        if image:
+            self.author_image.setImage(image)
+
+    def save_author(self):
+        text = self.name_edit.text()
+        metrics = QFontMetrics(QFont("Calibri", 20, 700))
+        if metrics.horizontalAdvance(text) < 311 and text:
+            if self.authors_om1.isSelected:
+                DataManager.updateOtherData("author", self.author_image.image_path, text)
+            else:
+                DataManager.saveOtherData("author", text, self.author_image.image_path)
+            self.dialog1.close()
+            self.authors_om.load_data()
+        else:
+            QMessageBox.warning(self, "Warning", "Author's name is too long or name is not entered")
+
+    def delete_author(self):
+        if self.authors_om1.isSelected and QMessageBox.question(self.dialog1, "Delete author", "Are you sure to delete this author?") == QMessageBox.StandardButton.Yes:
+            DataManager.deleteOtherData("author", self.name_edit.text())
+        self.dialog1.close()
+        self.phrases_om.load_data()
+        self.authors_om.load_data()
+
+    def toggle_date_edit(self, state):
+        if state:
+            self.date_edit.setEnabled(True)
+        else:
+            self.date_edit.setEnabled(False)
+
+    def add_phrase(self):
+        if self.phrase_edit.text() and self.author_edit.text() and self.authors_om.isSelected:
+            if self.date_checkbox.isChecked():
+                date = self.date_edit.text()
+            else:
+                date = None
+            DataManager.saveOtherData("phrase", date, self.phrase_edit.text(), self.author_edit.text())
+        self.author_edit.clear()
+        self.phrase_edit.clear()
+        self.phrases_om.load_data()
+
+    def delete_phrase(self):
+        if self.phrases_om.isSelected:
+            DataManager.deleteOtherData("phrase", self.phrase_edit.text())
+        self.author_edit.clear()
+        self.phrase_edit.clear()
+        self.phrases_om.load_data()
+
+    def phrase_selected(self, text, goal_id, obj_type):
+        self.author_edit.blockSignals(True)
+        self.author_edit.setText(DataManager.loadOtherData("phrase author", text, one=True)[0])
+        self.author_edit.blockSignals(False)
+
+class Top12Tab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.tree_widget = QTreeWidget()
+        self.tree_widget.setFont(QFont("Calibri", 18))
+        self.tree_widget.setHeaderLabels(["Number", "", "Name", "Time", "Date of completion", "ID"])
+        self.tree_widget.setStyleSheet("QTreeWidget::item{height: 140px}")
+        self.tree_widget.setIconSize(QSize(97, 97))
+        self.tree_widget.setSortingEnabled(True)
+        self.remove_act = QAction("Remove goal")
+        self.remove_act.triggered.connect(self.remove_goal)
+        self.font = QFont("Calibri", 18, 700)
+        self.tree_widget.setColumnWidth(0, 75)
+        self.tree_widget.setColumnWidth(1, 120)
+        self.tree_widget.setColumnWidth(4, 200)
+        for goal in DataManager.loadOtherData("top 12"):
+            goal_info = DataManager.loadMainData("goal", goal[1], one=True)
+            image_path = goal_info[9]
+            goal_info = [goal[0], goal_info[1], goal_info[2], goal_info[4], goal[1]]
+            self.add_item(goal_info, image_path)
+
+        add_button = QPushButton()
+        add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
+        add_button.setFixedSize(50, 50)
+        add_button.setObjectName("Menu")
+        add_button.clicked.connect(self.add_goal)
+        
+        h_box = QHBoxLayout()
+        h_box.setContentsMargins(300, 85, 250, 85)
+        h_box.addWidget(self.tree_widget)
+        h_box.addWidget(add_button, alignment=Qt.AlignmentFlag.AlignBottom)#baseline
+        self.setLayout(h_box)
+
+    def add_item(self, goal_info, image_path, save=False):
+        image = ws.getGoalImage(image_path, 100, goal_info[2])
+        goal_info = list(map(str, goal_info))
+        goal_info.insert(1, "")
+        goal_item = QTreeWidgetItem(self.tree_widget, goal_info)
+        goal_item.setFont(2, self.font)
+        goal_item.setIcon(1, QIcon(image))
+        goal_item.setSizeHint(1, QSize(100, 120))
+        self.tree_widget.addTopLevelItem(goal_item)
+        if save:
+            DataManager.saveOtherData("top goal", goal_info[5])
+
+    def add_goal(self):
+        if self.tree_widget.topLevelItemCount() == 12:
+            QMessageBox.warning(self, "The list fully filled", "The list has maximum amount of goals")
+        else:
+            self.dialog = QDialog()
+            self.dialog.setModal(True)
+            self.dialog.setMinimumHeight(150)
+            self.dialog.setWindowTitle(f"Add top {self.tree_widget.topLevelItemCount() + 1} goal")
+            self.goal_edit = QLineEdit()
+            self.goal_edit.setPlaceholderText("Enter goal name")
+            v_box = QVBoxLayout()
+            v_box.addWidget(self.goal_edit)
+            v_box.addStretch()
+            self.dialog.setLayout(v_box)
+            self.dialog.show()
+            self.object_manager = ws.ObjectManager(self.dialog, self.goal_edit, ["Goals"])
+            self.object_manager.h = 100
+            self.object_manager.selected.connect(self.goal_selected)
+
+    def goal_selected(self, text, goal_id, obj_type):
+        goal = DataManager.loadMainData("goal", goal_id, one=True)
+        new = True
+        for i in range(self.tree_widget.topLevelItemCount()):
+            item = self.tree_widget.topLevelItem(i)
+            if item.text(5) == goal_id:
+                new = False
+        if new and goal[7] == "completed":
+            self.add_item([self.tree_widget.topLevelItemCount() + 1, goal[1], goal[2], goal[4], goal[0]], goal[9].split(",")[0], True)
+        else:
+            QMessageBox.warning(self, "Warning", "The goal already added to the list or goal is incompleted")
+        self.dialog.close()
+
+    def contextMenuEvent(self, event):
+        self.item = self.tree_widget.itemAt(self.tree_widget.mapFromGlobal(event.pos()))
+        if isinstance(self.item, QTreeWidgetItem):
+            self.menu = QMenu()
+            self.menu.addAction(self.remove_act)
+            self.menu.exec(event.pos())
+
+    def remove_goal(self):
+        self.tree_widget.takeTopLevelItem(self.tree_widget.indexOfTopLevelItem(self.item))
+        DataManager.deleteOtherData("top goal", self.item.text(5))

@@ -29,6 +29,14 @@ QPushButton::menu-indicator {
     height: 0px;
     width: 0px;
     }
+QPushButton#Profile{
+    border: 1px solid #FFD300; 
+    background-color: #000000
+    }
+QPushButton#Profile::pressed{
+    background-color: #7F6900;
+    border: 1px solid #FFD300;
+    }
 QLabel{
     color: #FFD300;
     }

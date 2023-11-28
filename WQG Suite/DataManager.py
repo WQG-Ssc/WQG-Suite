@@ -7,12 +7,11 @@ other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-        #try: 
-        #    return func(*args, **kwargs)
-        #except Exception as error:
-        #    print(f'An error occurred in {func.__name__}: {error}')
-        #    return False
+        try: 
+            return func(*args, **kwargs)
+        except Exception as error:
+            print(f'An error occurred in {func.__name__}: {error}')
+            return False
     return wrapper
 
 @exception_handler
@@ -83,6 +82,17 @@ def loadMainData(data_type, *args, one=False):
     if data_type == "plans":
         cur.execute("SELECT start_time, end_time, task_ID FROM Plans WHERE date == ? ORDER BY start_time", args)
 
+    if data_type == "recently completed goals":
+        date = QDate.currentDate().addDays(-7).toString("yyyy-MM-dd")
+        cur.execute(f"SELECT name, files, time FROM Goals WHERE limit_date > {date} and state == 'completed'")
+
+    if data_type == "completing goals":
+        date = QDate.currentDate().addDays(-7).toString("yyyy-MM-dd")
+        cur.execute(f"SELECT name, files, progress, time, custom_characteristics FROM Goals WHERE state == 'completing'")
+
+    if data_type == "author":
+        cur.execute("SELECT author FROM Phrases WHERE phrase == ?", args)
+
     if one:
         data = cur.fetchone()
     else:
@@ -131,6 +141,7 @@ def saveMainData(data_type, args):
 
     if data_type == "Plans":
         cur.execute("INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES (?, ?, ?, ?, ?)", args)
+
     conn.commit()
     conn.close()
     return True
@@ -230,6 +241,72 @@ def deleteMainData(data_type, *args):
         else:
             return False
 
+    conn.commit()
+    conn.close()
+
+@exception_handler
+def loadOtherData(data_type, *args, one=False):
+    conn = sql.connect(other_db)
+    cur = conn.cursor()
+    if data_type == "names":
+        cur.execute(f"SELECT name FROM {args[0]}")
+
+    if data_type == "author":
+        cur.execute("SELECT image FROM Authors WHERE name == ?", args)
+
+    if data_type == "phrase author":
+        cur.execute("SELECT author FROM Phrases WHERE name == ?", args)
+
+    if data_type == "phrases for day":
+        cur.execute("SELECT name, author FROM Phrases WHERE date == ?", args)
+
+    if data_type == "phrases":
+        cur.execute("SELECT * FROM Phrases")
+
+    if data_type == "top 12":
+        cur.execute("SELECT RowID, goal_id FROM Top12")
+
+    if one:
+        data = cur.fetchone()
+    else:
+        data = cur.fetchall()
+    conn.close()
+    return data
+
+@exception_handler
+def saveOtherData(data_type, *args):
+    conn = sql.connect(other_db)
+    cur = conn.cursor()
+    if data_type == "phrase":
+        cur.execute("INSERT INTO Phrases (date, name, author) VALUES (?, ?, ?)", args)
+    if data_type == "author":
+        cur.execute("INSERT INTO Authors (name, image) VALUES (?, ?)", args)
+    if data_type == "top goal":
+        cur.execute("INSERT INTO Top12 (goal_id) VALUES (?)", args)
+
+    conn.commit()
+    conn.close()
+
+@exception_handler
+def deleteOtherData(data_type, *args):
+    conn = sql.connect(other_db)
+    cur = conn.cursor()
+    if data_type == "phrase":
+        cur.execute("DELETE FROM Phrases WHERE name == ?", args)
+    if data_type == "author":
+        cur.execute("DELETE FROM Authors WHERE name == ?", args)
+        cur.execute("DELETE FROM Phrases WHERE author == ?", args)
+    if data_type == "top goal":
+        cur.execute("DELETE FROM Top12 WHERE goal_id == ?", args)
+    conn.commit()
+    conn.close()
+
+@exception_handler
+def updateOtherData(data_type, *args):
+    conn = sql.connect(other_db)
+    cur = conn.cursor()
+    if data_type == "author":
+        cur.execute("UPDATE Authors SET image = ? WHERE name == ?", args)
     conn.commit()
     conn.close()
 

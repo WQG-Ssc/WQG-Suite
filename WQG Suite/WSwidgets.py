@@ -1,35 +1,35 @@
 # -*- coding: cp1251 -*-
-import os, sys, math
+import os, sys, math, random, configparser
 import DataManager
 from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsTextItem, QRadioButton, QTimeEdit
-from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QKeySequence
+from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QKeySequence, QImage
 from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
 from plotly.io import to_html
 import plotly.graph_objs as go
-import configparser as config
 import datetime as dt
+user_config_file = r"Files\config\user.ini"
 
 class AddImageLabel(QLabel):
     imageAdded = pyqtSignal()
-    def __init__(self, size=QSize(80, 80), shaping=True, default_image_path=r"Files\Icons\default_profile_image.png"):
+    def __init__(self, size=QSize(80, 80), shaping=True, default_image_path=r"Files\Icons\default_profile_image.png", ring=False):
         super().__init__()
 
         self.size = size
         self.shaping = shaping
-
         self.isImageAdded = False
         self.last_dir = None
+        self.image_path = ""
         self.setFixedSize(self.size)
-
         self.image = QPixmap(default_image_path)
         self.image = self.image.scaled(QSize(self.size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-
         self.setPixmap(self.image)
-
+        self.ring = ring
+        if self.ring:
+            self.addRing()
         if self.shaping:
-            self.setPixmap(shapeImage(self.size(), self.image()))
+            self.shape_image()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.underMouse():
@@ -38,10 +38,11 @@ class AddImageLabel(QLabel):
     def addImage(self):
         height = self.size.height()
         if self.last_dir:
-            self.image_path, _ = QFileDialog.getOpenFileName(self, 'Choose an image', self.last_dir, "Image Files (*.png *.jpg *.bmp)")
+            image_path, _ = QFileDialog.getOpenFileName(self, 'Choose an image', self.last_dir, "Image Files (*.png *.jpg *.bmp)")
         else:
-            self.image_path, _ = QFileDialog.getOpenFileName(self, 'Choose an image', r'C:\Users\WQG-S\OneDrive\Рабочий стол\code\Mountain Quiz\images', "Image Files (*.png *.jpg *.bmp)")
-        if self.image_path:
+            image_path, _ = QFileDialog.getOpenFileName(self, 'Choose an image', r'C:\Users\WQG-S\OneDrive\Рабочий стол\code\Mountain Quiz\images', "Image Files (*.png *.jpg *.bmp)")
+        if image_path:
+            self.image_path = image_path
             self.last_dir = os.path.dirname(self.image_path)
             self.image = QPixmap(self.image_path)
             self.sizeImage()
@@ -51,11 +52,12 @@ class AddImageLabel(QLabel):
             if self.shaping:
                 if size.height() > height or size.width() > height:
                     self.image = self.image.copy(size.width() // 2 - height / 2, size.height() // 2 - height / 2, self.size.width(), height)
-                self.setPixmap(shapeImage(self.size, self.image))
+                self.shape_image()
             else:
                 self.setPixmap(self.image)
+            if self.ring: self.addRing()
 
-    def shapeImage(self):
+    def shape_image(self):
         mask = QBitmap(self.size)
         mask.fill(Qt.GlobalColor.color0)
         painter = QPainter(mask)
@@ -65,7 +67,6 @@ class AddImageLabel(QLabel):
         painter.end()
 
         self.image.setMask(mask)
-
         self.setPixmap(self.image)
 
     def sizeImage(self):
@@ -73,11 +74,28 @@ class AddImageLabel(QLabel):
 
     def setImage(self, image_path):
         self.image = QPixmap(image_path)
+        self.image_path = image_path
         self.sizeImage()
         if self.shaping:
-            self.shapeImage()
-        self.setPixmap(self.image)
+            size = self.image.size()
+            height = self.size.height()
+            if size.height() > height or size.width() > height:
+                self.image = self.image.copy(size.width() // 2 - height / 2, size.height() // 2 - height / 2, self.size.width(), height)
+            self.shape_image()
         self.isImageAdded = True
+        if self.ring: self.addRing()
+
+    def addRing(self):
+        self.setFixedSize(82, 82)
+        image = QImage(82, 82, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.black)
+        template = QPixmap(r"Files\icons\author template.png")
+        painter = QPainter(image)
+        painter.drawPixmap(1, 1, self.image)
+        painter.drawPixmap(0, 0, template)
+        painter.end()
+        self.image = QPixmap(image)
+        self.setPixmap(self.image)
 
 def shapeImage(size, image):
     mask = QBitmap(size)
@@ -95,64 +113,197 @@ class ProfileInfoBox(QWidget):
     clicked = pyqtSignal()
     def __init__(self, image, info, gotoProfile=True):
         super().__init__()
-        self.setFixedSize(365, 480)
-        self.arrangeWidgets(image, info)
+        self.setFixedSize(330, 157)
         self.gotoProfile = gotoProfile
+        self.painter = QPainter()
+        parser = configparser.ConfigParser()
+        parser.read(user_config_file)
+        self.diary_path = parser.get("User", "Diary_path")
 
-    def arrangeWidgets(self, image, info):
         self.profile_image = QLabel()
-        self.profile_image.setPixmap(shapeImage(QSize(80, 80), image))
+        size = QSize(90, 90)
+        image = image.scaled(QSize(size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        image_size = image.size()
+        height = size.height()
+        if image_size.height() > height or image_size.width() > height:
+            image = image.copy(image_size.width() // 2 - height / 2, image_size.height() // 2 - height / 2, size.width(), height)
+        self.profile_image.setPixmap(shapeImage(size, image))
 
         self.user_name = QLabel(info[0])
         self.user_name.setFont(QFont('Calibri', 24))
 
-        lvl_bar = QProgressBar()
-        lvl_bar.setFixedSize(155, 32)
-        year_bar = QProgressBar()
-        year_bar.setFixedSize(300, 28)
-        month_bar = QProgressBar()
-        month_bar.setFixedSize(300, 28)
-        day_bar = QProgressBar()
-        day_bar.setFixedSize(300, 28)
+        diary_button = QPushButton()
+        diary_button.clicked.connect(self.open_diary)
+        diary_button.setFixedSize(42, 20)
+        diary_button.setIconSize(QSize(12, 14))
+        diary_button.setIcon(QIcon(r"Files\icons\diary.png"))
+        diary_button.setObjectName("Profile")
+        self.top12_button = QPushButton()
+        self.top12_button.setFixedSize(42, 20)
+        self.top12_button.setIconSize(QSize(13, 12))
+        self.top12_button.setIcon(QIcon(r"Files\icons\top 12 goals.png"))
+        self.top12_button.setObjectName("Profile")
+        
+        user_h_box = QHBoxLayout()
+        user_h_box.addSpacing(10)
+        user_h_box.addWidget(self.profile_image)
+        user_h_box.addSpacing(15)
+        user_h_box.addWidget(self.user_name, alignment=Qt.AlignmentFlag.AlignVCenter)
+        user_h_box.addStretch()
 
-        v_box = QVBoxLayout()
-        v_box.addWidget(self.user_name, alignment=Qt.AlignmentFlag.AlignLeft)
-        v_box.addWidget(lvl_bar, alignment=Qt.AlignmentFlag.AlignLeft)
-        
-        h_box = QHBoxLayout()
-        h_box.addWidget(self.profile_image)
-        h_box.addLayout(v_box)
-        h_box.addStretch()
-        
+        buttons_h_box = QHBoxLayout()
+        buttons_h_box.addStretch()
+        buttons_h_box.setSpacing(12)
+        buttons_h_box.addWidget(diary_button)
+        buttons_h_box.addWidget(self.top12_button)
+
         main_v_box = QVBoxLayout()
-        main_v_box.addLayout(h_box)
-        main_v_box.addSpacing(42)
-        main_v_box.addWidget(year_bar)
-        main_v_box.addSpacing(26)
-        main_v_box.addWidget(month_bar)
-        main_v_box.addSpacing(26)
-        main_v_box.addWidget(day_bar)
-        main_v_box.addStretch()
-
+        main_v_box.addLayout(user_h_box)
+        main_v_box.addLayout(buttons_h_box)
         self.setLayout(main_v_box)
 
+    def open_diary(self):
+        if not self.diary_path:
+            path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *.rtf *docx)")
+            if path:
+                parser = configparser.ConfigParser()
+                parser.read(user_config_file)
+                self.diary_path = path
+                parser.set("User", "Diary_path", self.diary_path)
+                with open(user_config_file, "w") as config_file:
+                    parser.write(config_file)
+        if self.diary_path:
+            os.startfile(self.diary_path)
+
     def paintEvent(self, event):
-        painter = QPainter(self)
-        pen = QPen(QColor("#FFD300"), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor("#FFD300"), 2)
         brush = QBrush(Qt.BrushStyle.NoBrush)
+        self.painter.begin(self)
+        self.painter.setPen(pen)
+        self.painter.setBrush(brush)
+        self.painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        painter.setPen(pen)
-        painter.setBrush(brush)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        painter.drawLine(364, 370, 364, 0)
-        painter.drawLine(0, 476, 364, 370)
-        
-        painter.end()
+        self.painter.drawLine(0, 157, 330, 157)
+        self.painter.drawLine(330, 0, 330, 157)
+        self.painter.end()
 
     def mousePressEvent(self, event):
         if (event.button() == Qt.MouseButton.LeftButton) and (self.profile_image.underMouse() or self.user_name.underMouse()) and self.gotoProfile:
             self.clicked.emit()
+
+class CompletingGoalsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(330, 502)
+        self.painter = QPainter()
+        font24 = QFont("Calibri", 24, 700)
+        font16 = QFont("Calibri", 16, 700)
+        recent_label = QLabel("Recently completed")
+        recent_label.setFont(font24)
+        recent_list_widget = QListWidget()
+        recent_list_widget.setFont(font16)
+        recent_list_widget.setIconSize(QSize(70, 70))
+        recent_list_widget.setStyleSheet("border: none")
+        recent_list_widget.setViewMode(QListWidget.ViewMode.IconMode)
+
+        in_progress_label = QLabel("In progress")
+        in_progress_label.setFont(font24)
+        in_progress_widget = QListWidget()
+        in_progress_widget.setFont(font16)
+        in_progress_widget.setIconSize(QSize(67, 67))
+        in_progress_widget.setStyleSheet("border: none")
+        in_progress_widget.setViewMode(QListWidget.ViewMode.IconMode)
+
+        recently_completed_goals = DataManager.loadMainData("recently completed goals")
+        if recently_completed_goals:
+            for goal in recently_completed_goals:
+                recent_list_widget.addItem(self.create_item(goal))
+
+        completing_goals = DataManager.loadMainData("completing goals")
+        if completing_goals:
+            for goal in completing_goals:
+                in_progress_widget.addItem(self.create_item(goal))
+
+        v_box = QVBoxLayout()
+        v_box.addWidget(recent_label)
+        v_box.addWidget(recent_list_widget)
+        v_box.addWidget(in_progress_label)
+        v_box.addWidget(in_progress_widget)
+        v_box.addSpacing(112)
+        self.setLayout(v_box)
+
+    def create_item(self, goal):
+        if len(goal) == 3:
+            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], 100, goal[2], 56)), goal[0])
+        else:
+            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), goal[0])
+        item.setTextAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
+        item.setFlags(~Qt.ItemFlag.ItemIsSelectable)
+        return item
+
+    def paintEvent(self, event):
+        self.painter.begin(self)
+        self.painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.painter.setPen(QPen(QColor("#FFD300"), 2))
+        self.painter.drawLine(0, 502, 330, 390)
+        self.painter.drawLine(330, 0, 330, 390)
+        self.painter.end()
+
+class TodayPhraseWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.painter = QPainter()
+        self.setFixedSize(450, 120)
+        
+        phrase, author, pixmap = self.get_today_phrase()
+        icon = QLabel(self)
+        icon.setPixmap(pixmap)
+        author_label = QLabel(author, self)
+        author_label.setFont(QFont("Calibri", 20, 700))
+        author_label.setGeometry(125, 88, 310, 30)
+        author_label.setFixedSize(310, 30)
+        author_label.setStyleSheet("color: white")
+        author_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        author_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        phrase_label = QLabel(phrase, self)
+        phrase_label.setFont(QFont("Calibri", 18, italic=True))
+        phrase_label.setStyleSheet("color: white")
+        phrase_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        phrase_label.setFixedSize(272, 52)
+        phrase_label.setGeometry(145, 23, 272, 52)
+        phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        phrase_label.setWordWrap(True)
+
+    def get_today_phrase(self):
+        current_date = QDate.currentDate().toString("yyyy-MM-dd")
+        phrases = DataManager.loadOtherData("phrases for day", current_date)
+        default = False
+        if not phrases:
+            phrases = DataManager.loadOtherData("phrases")
+            if not phrases:
+                phrases = [["Add some goals to get started", "WQG's Suite"]]
+                default = True
+        phrase = random.choice(phrases)
+        if default:
+            image = r"C:\Users\WQG-S\OneDrive\Рабочий стол\code\WQG Suite\WQG Suite\Files\Icon.png"
+        else:
+            image = DataManager.loadOtherData("author", phrase[1], one=True)
+            if any(image):
+                image = image[0]
+            else:
+                image = r"C:\Users\WQG-S\OneDrive\Рабочий стол\code\WQG Suite\WQG Suite\Files\icons\default_profile_image.png"
+
+        pixmap = QPixmap(image).scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        size = pixmap.size()
+        if size.width() > 120:
+            pixmap = pixmap.copy((size.width() - 120) / 2, (size.height() - 120) / 2, 120, 120)
+        print(pixmap.size())
+        return phrase[0], "—" + phrase[1], pixmap
+
+    def paintEvent(self, event):
+        self.painter.begin(self)
+        self.painter.drawPixmap(0, 0, QPixmap(r"Files\icons\phrase background.png"))
+        self.painter.end()
 
 class GoalBranch(QWidget):
     deleteBranch = pyqtSignal(str)
@@ -200,32 +351,29 @@ def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
     mask = QBitmap(diameter, diameter)
     mask.fill(Qt.GlobalColor.color0)
     painter = QPainter(mask)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setBrush(Qt.GlobalColor.color1)
     painter.drawEllipse(mask.rect())
     painter.end()
-
     image.setMask(mask)
 
     if diameter > 75:
         template = QPixmap(r"Files\Icons\big template.png")
-        offset = 13
-        offset2 = 22
-    else:
-        offset = 12
-        offset2 = 20
+        offset = 11
+    elif diameter == 75:
+        offset = 11
         template = QPixmap(r"Files\Icons\template.png")
+    else:
+        offset = 7
+        template = QPixmap(r"Files\Icons\mini template.png")
 
     painter.begin(template)
-
     painter.drawPixmap(offset, offset, image)
 
     painter.setPen(QPen(QColor(getGoalColor(d_diff)), 3, Qt.PenStyle.SolidLine))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    rect = QRectF(2.0, 2.0, diameter + offset2, diameter + offset2)
+    rect = QRectF(1.5, 1.5, diameter + offset * 2 - 3, diameter + offset * 2 - 3)
     painter.drawArc(rect, 90 * 16, goal_progress * -3.6 * 16)
     painter.end()
-
     return template
 
 class dDiffIndicator(QLabel):
@@ -877,7 +1025,10 @@ class ObjectManager(QWidget):
     def load_data(self):
         self.data = {}
         for data_type in self.s_filter:
-            names = DataManager.loadMainData("names", data_type)
+            if data_type == "Authors" or data_type == "Phrases":
+                names = DataManager.loadOtherData("names", data_type)
+            else:
+                names = DataManager.loadMainData("names", data_type)
             if names:
                 if data_type == "Goals":
                     self.goals_ids = [item[1] for item in names]
@@ -955,7 +1106,7 @@ class CompleteGoalWindow(QWidget):
         else:
             self.recalc_goal_values_for_comp()
             goal_image = QLabel()
-            goal_image.setPixmap(getGoalImage(self.goal_data[9].split(",")[0], calculate_progress(self.goal_data[10], self.goal_data[2], self.goal_data[11]), float(self.goal_data[2]), 138))
+            goal_image.setPixmap(getGoalImage(self.goal_data[9].split(",")[0], 100, float(self.goal_data[2]), 138))
             goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
             name_label = QLabel(self.goal_data[1])
@@ -1329,7 +1480,7 @@ class WeekPlanView(QGraphicsView):
                 if dtday < current_date:
                     used_table = "stats"
                 elif dtday == current_date:
-                    parser = config.ConfigParser()
+                    parser = configparser.ConfigParser()
                     parser.read(r"Files\config\user.ini")
                     lastCompletedDay = parser.get("Data", "formfillingdate")
                     if lastCompletedDay == current_date.strftime("%Y-%m-%d"):
@@ -1790,16 +1941,19 @@ def to_str(msecs):
     h, m = divmod(m, 60)
     return f'{h:02d}:{m:02d}:{s:02d}'
 
-def calculate_progress(progress, time, characts):#Calculates progress of a goal when showing it in the goal window
+def calculate_progress(progress, time, characts, state):#Calculates progress of a goal when showing it in the goal window
     progress, p_charact = progress.split(":")
     progress = float(progress)
-    if progress:
-        if p_charact == "Hours":
-            percents = progress / float(time) * 100
-        else:
-            percents = progress / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on finish value of the charact
+    if state == "completed":
+        percents = 100
     else:
-        percents = 0
+        if progress:
+            if p_charact == "Hours":
+                percents = progress / float(time) * 100
+            else:
+                percents = progress / float([item.split(":")[1] for item in characts.split(",") if item.split(":")[0] == p_charact][0]) * 100 #Devide progress on finish value of the charact
+        else:
+            percents = 0
     if percents > 100:
         percents = 100.0
     return round(percents, 2)

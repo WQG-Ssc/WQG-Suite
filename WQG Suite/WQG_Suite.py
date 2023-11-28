@@ -1,6 +1,6 @@
 # -*- coding: cp1251 -*-
 import os, sys, configparser, subprocess, DataManager
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QComboBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QComboBox, QCheckBox
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
 from style_sheet import style_sheet
@@ -25,18 +25,18 @@ class MainWindow(QMainWindow):
             conn = sql.connect(main_db)
             cur = conn.cursor()
             cur.execute("CREATE TABLE Main_statistics (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT, busy INTEGER)")
-            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date TEXT, priority TEXT, used_skills TEXT, state INTEGER, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, is_group INTEGER, showing_in_list INTEGER)")
+            cur.execute("CREATE TABLE Goals (ID TEXT PRIMARY KEY NOT NULL, name TEXT, time REAL, benefit INTEGER, limit_date DATE, priority TEXT, used_skills TEXT, state TEXT, note TEXT, files TEXT, progress TEXT, custom_characteristics TEXT, cc_stats TEXT, is_group INTEGER, showing_in_list INTEGER)")
             cur.execute("CREATE TABLE Skills (name TEXT PRIMARY KEY NOT NULL, time REAL)")
             cur.execute("CREATE TABLE Branches (name TEXT PRIMARY KEY NOT NULL, custom_characteristics TEXT, sections_position TEXT)")
-            cur.execute("CREATE TABLE Days (date TEXT PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL)")
+            cur.execute("CREATE TABLE Days (date DATE PRIMARY KEY NOT NULL, 'Mental state' TEXT, 'Physical state' TEXT, 'Day rate' INTEGER, 'Work time' REAL)")
             cur.execute("CREATE TABLE Graphs (name TEXT, value_type TEXT, color TEXT)")
             cur.execute("CREATE TABLE Characteristics (name TEXT PRIMARY KEY NOT NULL, c_type TEXT, v_type TEXT)")
-            cur.execute("CREATE TABLE Skills_statistics (date TEXT, task_ID TEXT)")
+            cur.execute("CREATE TABLE Skills_statistics (date DATE, task_ID TEXT)")
             cur.execute("CREATE TABLE Tasks (name TEXT, used_skills TEXT, busy INTEGER)")
-            cur.execute("CREATE TABLE Plans (start_time TEXT, end_time TEXT, task_ID TEXT, date TEXT, busy INTEGER)")
+            cur.execute("CREATE TABLE Plans (start_time TEXT, end_time TEXT, task_ID TEXT, date DATE, busy INTEGER)")
 
             cur.execute("""INSERT INTO Graphs (name, value_type, color) VALUES ('Mental state', 'Letteric', '#FF0000'), 
-                        ('Physical state', 'Letteric', '#F44336'), 
+                        ('Physical state', 'Letteric', '#F44336'),
                         ('Work time', 'Numeric', '#FFD300'),
                         ('Day rate', 'Numeric', '#00FFFF')""")
             conn.commit()
@@ -44,8 +44,9 @@ class MainWindow(QMainWindow):
         if not os.path.exists(other_db):
             conn = sql.connect(other_db)
             cur = conn.cursor()
-            cur.execute("CREATE TABLE Phrases (date TEXT, author TEXT, phrase TEXT)")
-            cur.execute("CREATE TABLE Authors (author TEXT PRIMARY KEY, images TEXT)")
+            cur.execute("CREATE TABLE Phrases (date DATE, name TEXT PRIMARY KEY, author TEXT)")
+            cur.execute("CREATE TABLE Authors (name TEXT PRIMARY KEY NOT NULL, image TEXT)")
+            cur.execute("CREATE TABLE Top12 (goal_id TEXT PRIMARY KEY)")
             conn.commit()
             conn.close()
 
@@ -83,9 +84,7 @@ class MainWindow(QMainWindow):
             config.read(user_config_path)
 
             self.user_name = config.get("User", "Name")
-            self.user_password = config.get("User", "Password")
-            self.user_image = QPixmap(r"Files/icons/User/Profile_picture.png")
-
+            self.user_image = QPixmap(config.get("User", "Image_path"))
             self.main_menu()
 
         #    time = QTime()
@@ -200,41 +199,43 @@ class MainWindow(QMainWindow):
         plans_button.setIconSize(QSize(119, 107))
         plans_button.clicked.connect(self.plans_window)
 
-        home_button = QPushButton()
-        home_button.setIcon(QIcon(i_dir + r"\Home.png"))
-        home_button.setFixedSize(138, 110)
-        home_button.setObjectName("Menu")
-        home_button.setIconSize(QSize(138, 95))
-
         buttons_h_box = QHBoxLayout()
-        buttons_h_box.addSpacing(62)
-        buttons_h_box.addWidget(statistics_button, alignment=Qt.AlignmentFlag.AlignVCenter)
-        buttons_h_box.addSpacing(155)
-        buttons_h_box.addWidget(goals_button, alignment=Qt.AlignmentFlag.AlignVCenter)
-        buttons_h_box.addSpacing(155)
-        buttons_h_box.addWidget(plans_button, alignment=Qt.AlignmentFlag.AlignVCenter)
-        buttons_h_box.addSpacing(155)
-        buttons_h_box.addWidget(home_button, alignment=Qt.AlignmentFlag.AlignVCenter)
+        buttons_h_box.addSpacing(250)
+        buttons_h_box.addWidget(statistics_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        buttons_h_box.addSpacing(150)
+        buttons_h_box.addWidget(goals_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        buttons_h_box.addSpacing(150)
+        buttons_h_box.addWidget(plans_button, alignment=Qt.AlignmentFlag.AlignHCenter)
         buttons_h_box.addStretch()
 
         self.user_info = [self.user_name]#Потом будет добалена информация о прогрессе
 
         profile_info_box = ws.ProfileInfoBox(self.user_image, self.user_info)
         profile_info_box.clicked.connect(self.profile_window)
-        
-        main_v_box = QHBoxLayout()
-        main_v_box.addWidget(profile_info_box, alignment=Qt.AlignmentFlag.AlignTop)
-        main_v_box.addLayout(buttons_h_box)
-        main_v_box.setContentsMargins(0, 0, 0, 0)
+        profile_info_box.top12_button.clicked.connect(self.top_12)
+
+        completing_goals_widget = ws.CompletingGoalsWidget()
+        today_phrase = ws.TodayPhraseWidget()
+
+        left_v_box = QVBoxLayout()
+        left_v_box.setSpacing(0)
+        left_v_box.addWidget(profile_info_box, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        left_v_box.addWidget(completing_goals_widget, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        left_v_box.addStretch()
+
+        main_h_box = QHBoxLayout()
+        main_h_box.addLayout(left_v_box)
+        main_h_box.addLayout(buttons_h_box)
+        main_h_box.addWidget(today_phrase, alignment=Qt.AlignmentFlag.AlignBottom)
+        main_h_box.setContentsMargins(0, 0, 0, 30)
 
         container = QWidget()
-        container.setLayout(main_v_box)
+        container.setLayout(main_h_box)
 
         self.create_toolbar()
-        if sys.argv[1] == "finish day":
+        if len(sys.argv) > 1 and sys.argv[1] == "finish day":
             self.form()
         self.stacked_widget.addWidget(container)
-        #self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image, self.user_info)
@@ -349,11 +350,62 @@ class MainWindow(QMainWindow):
         stat_edit_button.clicked.connect(self.statistics_editor)
         clear_db_button = QPushButton("Clear a database")
         clear_db_button.clicked.connect(self.clear_db_dialog)
+        edit_phrases_button = QPushButton("Edit phrases and authors")
+        edit_phrases_button.clicked.connect(self.edit_phrases)
+        edit_profile_button = QPushButton("Edit profile")
+        edit_profile_button.clicked.connect(self.edit_profile)
         v_box = QVBoxLayout()
+        v_box.setSpacing(10)
         v_box.addWidget(stat_edit_button)
         v_box.addWidget(clear_db_button)
+        v_box.addWidget(edit_phrases_button)
+        v_box.addWidget(edit_profile_button)
         self.dialog.setLayout(v_box)
         self.dialog.show()
+
+    def edit_profile(self):
+        self.dialog = QDialog()
+        self.dialog.setModal(True)
+        parser = configparser.ConfigParser()
+        parser.read(user_config_path, encoding="cp1251")
+        name = parser.get("User", "Name")
+        image_path = parser.get("User", "Image_path")
+        self.diary_path = parser.get("User", "Diary_path")
+
+        self.user_image = ws.AddImageLabel()
+        self.user_image.setImage(image_path)
+        self.name_edit = QLineEdit(name)
+        diary_button = QPushButton("Edit diary path")
+        diary_button.clicked.connect(self.get_diary_path)
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.save_profile)
+        v_box = QVBoxLayout()
+        v_box.addWidget(self.user_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(self.name_edit)
+        v_box.addWidget(diary_button)
+        v_box.addWidget(ok_button)
+        self.dialog.setLayout(v_box)
+        self.dialog.show()
+
+    def save_profile(self):
+        if self.name_edit.text():
+            image_path = self.user_image.image_path
+            parser = configparser.ConfigParser()
+            parser.read(user_config_path)
+            parser.set("User", "Name", self.name_edit.text())
+            parser.set("User", "Image_path", image_path)
+            parser.set("User", "Diary_path", self.diary_path)
+            with open(user_config_path, "w") as config_file:
+                parser.write(config_file)
+            self.dialog.close()
+        else:
+            QMessageBox.warning(self, "Name field is empty", "Enter name to save profile")
+
+    def get_diary_path(self):
+        self.diary_path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *.rtf *docx)")
+
+    def edit_phrases(self):
+        self.dialog = wstabs.PhrasesEditor()
 
     def clear_db_dialog(self):
         self.dialog = QDialog()
@@ -371,7 +423,7 @@ class MainWindow(QMainWindow):
 
     def clear_table(self, table_combo):
         if QMessageBox.question(self, "Clear table", f"Are you sure to clear the table: {table_combo.currentText()}?") == QMessageBox.StandardButton.Yes:
-            DataManager.deleteMainData("clear table", table_combo.currentText())
+            DataManager.deleteOtherData("clear table", table_combo.currentText())
         self.dialog.close()
 
     def notes(self):
@@ -384,6 +436,11 @@ class MainWindow(QMainWindow):
 
     def statistics_editor(self):
         self.dialog = wstabs.StatisticsEditor()
+
+    def top_12(self):
+        top12_tab = wstabs.Top12Tab()
+        self.stacked_widget.addWidget(top12_tab)
+        self.next_window()
 
     def statistics_window(self):
         stats_tab = wstabs.StatisticsTab()

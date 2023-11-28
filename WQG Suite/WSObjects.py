@@ -49,7 +49,7 @@ class Goal(QObject):
         note_text_edit.setPlainText(self.goal_data[8])#Change textEdit's text without triggering textChanged signal
         note_text_edit.blockSignals(False)
         if self.isGoalExists:
-            goal_progress = str(ws.calculate_progress(self.goal_data[10], self.goal_data[2], self.goal_data[11]))
+            goal_progress = str(ws.calculate_progress(self.goal_data[10], self.goal_data[2], self.goal_data[11], self.goal_data[7]))
         else:
             goal_progress = "0"
         self.cell_list[4].setText(f"Progress: {goal_progress}%")
