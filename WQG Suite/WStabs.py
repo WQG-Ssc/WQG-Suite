@@ -354,7 +354,6 @@ class GoalTab(QWidget):
         characts_list_widget.setStyleSheet("QScrollBar{width: 0px}")
 
         charact_edits = []
-
         for i in range(4): #Amount of standard goal characteristics is 4
             charact = goal_characts[i]
             charact_widget = QWidget()
@@ -377,11 +376,13 @@ class GoalTab(QWidget):
                 line_edit.setValidator(validator)
                 line_edit.textEdited.connect(self.setSaveEnabled)
             h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignLeft)
-            h_box.addWidget(line_edit, alignment=Qt.AlignmentFlag.AlignRight)
+            h_box.addStretch()
+            h_box.addWidget(line_edit)
             if charact == "Time:":
                 self.d_diff_indicator = ws.dDiffIndicator()
                 line_edit.textChanged.connect(self.update_goal_indicator)
                 h_box.addWidget(self.d_diff_indicator)
+                h_box.addSpacing(6)
             else:
                 h_box.addSpacing(24)
             h_box.addSpacing(20)
@@ -674,7 +675,7 @@ class GoalTab(QWidget):
             object_name = line_edit.text()
         if setting_mode or object_manager.isSelected and object_name not in list_widget.addedItemsText:
             item = QListWidgetItem()
-            widget = ws.SkillCharactWidget(object_name, object_value, data_type)
+            widget = ws.SkillCharactWidget(object_name, object_value, data_type, spacing=True)
             widget.value_edit.textEdited.connect(lambda: self.skill_or_charact_changed(widget.value_edit, list_widget, object_name))
             widget.delete_button.clicked.connect(lambda: self.remove_skill_or_charact(item, object_name, list_widget, data_type))
             item.setSizeHint(widget.sizeHint())

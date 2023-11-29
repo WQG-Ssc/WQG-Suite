@@ -21,13 +21,10 @@ class Goal(QObject):
         if self.goal_id:
             self.goal_data = list(DataManager.loadMainData("goal", self.goal_id, one=True))
             self.isGoalExists = True
-        #ID, name, time, benefit, limit_date, priority, used_skills (,), state, note, files (,), progress (,), custom_characteristics (,:), is_group, showing_in_list
         else:
             self.goal_data = ["", "", 0, "", "", "", "", "creating", "", r"Files\icons\Add an image....png", "", "", "", "", ""]
             
     def displayData(self):
-        #cell_list: 1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7 - isgroup, 8-12 - characts lineEdits
-        #list_widget_list = [self.goal_tree_list_widget, characts_list_widget, skills_list_widget]
         if self.goal_data[13]:
             isGroup = True
         else:

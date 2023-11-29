@@ -345,7 +345,6 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
     skills_dict = {}
     cc_stats_dict = {charact:{} for charact in charactsToRecalc}
     time = 0.0
-
     skills = ""
     ccs = ""
     cc_stats = ""

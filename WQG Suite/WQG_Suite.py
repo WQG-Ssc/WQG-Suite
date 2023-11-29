@@ -1,7 +1,7 @@
 # -*- coding: cp1251 -*-
 import os, sys, configparser, subprocess, DataManager
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QComboBox, QCheckBox
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate
+from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate, QTimer
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
 from style_sheet import style_sheet
 import WSwidgets as ws
@@ -55,23 +55,22 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("Files\Icon.png"))
         self.anyChangesMade = False
         self.isGoalListNeedsToBeUpdated = False
-        self.showAnimation()
         self.setUpMainWindow()
-
         self.showMaximized()
 
-    def showAnimation(self):
-        pass
-        #label = QLabel()
-        #label.setPixmap(QPixmap(images["Start Window"]))
+    #def showAnimation(self):
+    #    self.dialog = ws.AnimationDialog()
+    #    self.anim_timer = QTimer()
+    #    self.anim_timer.setInterval(1100)
+    #    self.anim_timer.setSingleShot(True)
+    #    self.anim_timer.timeout.connect(self.end_animation)
+    #    self.anim_timer.start()
+    #    self.dialog.show()
 
-        #painter = QPainter()
-        #for alpha in range(0.0, 1.0, 0.1):
-        #    pen = QPen(QColor(0, 0, 0, alpha))
-        #    brush = QBrush(QColor(0, 0, 0, alpha))
-        #    painter.setBrush(brush)
-        #    painter.drawRect(QRect(0, 0, 1080, 1920))
-        #    painter.end()
+    #def end_animation(self):
+    #    self.dialog.close()
+    #    self.setUpMainWindow()
+    #    self.showMaximized()
 
     def setUpMainWindow(self):
         self.stacked_widget = QStackedWidget()
@@ -84,63 +83,10 @@ class MainWindow(QMainWindow):
             config.read(user_config_path)
 
             self.user_name = config.get("User", "Name")
-            self.user_image = QPixmap(config.get("User", "Image_path"))
+            self.user_image_path = config.get("User", "Image_path")
             self.main_menu()
-
-        #    time = QTime()
-        #    current_hour = int(time.currentTime().toString().split(":")[0])
-        #    if current_hour > 18:
-        #        time_of_day = "evening"
-        #    elif current_hour > 12:
-        #        time_of_day = "afternoon"
-        #    elif current_hour >= 0:
-        #        time_of_day = "morning"
-
-        #    header_label = QLabel(f"Good {time_of_day}, {self.user_name.split()[0]}!")
-        #    header_label.setFont(QFont('Calibri', 36, 700))
-
-        #    profile_image = QLabel()
-        #    profile_image.setPixmap(ws.shapeImage(QSize(80, 80), self.user_image))
-        #    password_label = QLabel("Password:")
-
-        #    self.password_edit = QLineEdit()
-        #    self.password_edit.setFixedWidth(150)
-
-        #    self.enter_password_act = QAction()
-        #    self.enter_password_act.triggered.connect(self.check_password)
-        #    self.enter_password_act.setShortcut("Enter")
-
-        #    enter_button = QPushButton()
-        #    enter_button.setIcon(QIcon(i_dir + r"\Arrow Right.png"))
-        #    enter_button.setFixedSize(20, 20)
-        #    enter_button.addAction(self.enter_password_act)
-        #    enter_button.clicked.connect(self.check_password)
-
-        #    h_box = QHBoxLayout()
-        #    h_box.addStretch()
-        #    h_box.addWidget(password_label)
-        #    h_box.addWidget(self.password_edit)
-        #    h_box.addWidget(enter_button)
-        #    h_box.addStretch()
-
-        #    entry_container = QWidget()
-        #    entry_container.setLayout(h_box)
-
-        #    main_v_box = QVBoxLayout()
-        #    main_v_box.addStretch()
-        #    main_v_box.addWidget(header_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        #    main_v_box.addSpacing(40)
-        #    main_v_box.addWidget(profile_image, alignment=Qt.AlignmentFlag.AlignHCenter)
-        #    main_v_box.addWidget(entry_container)
-        #    main_v_box.addStretch()
-
-        #    container = QWidget()
-        #    container.setLayout(main_v_box)
-
-        #    self.stacked_widget.addWidget(container)
-        #    self.stacked_widget.setCurrentIndex(0)
-
-        #else: self.create_account()
+        else: 
+            self.create_account()
 
     def check_password(self):
         if self.password_edit.text():
@@ -149,27 +95,28 @@ class MainWindow(QMainWindow):
                 self.main_menu()
             else: QMessageBox.warning(self, 'Invalid password', 'Invalid password')
 
-    def check_account_entry(self): #Проверяет, вся ли информация аккаунта введена
+    def check_account_entry(self):
         self.user_name = self.name_edit.text()
-        self.user_password = self.password_edit.text()
-        if self.user_name and self.user_password:
+        self.user_image_path = self.profile_image_label.image_path
+        if not self.user_image_path:
+            self.user_image_path = r"Files\icons\default_profile_image.png"
+        if self.user_name:
             self.save_account()
         else:
-            QMessageBox.warning(self, 'Empty fields', 'Enter all user information')
+            QMessageBox.warning(self, 'Empty field', 'Please, enter the account name')
 
-    def save_account(self): #Создаёт файл настроек
+    def save_account(self):
         config = configparser.ConfigParser()
         config.add_section("User")
+        config.add_section("Data")
         config.set("User", "Name", self.user_name)
-        config.set("User", "Password", self.user_password)
+        config.set("User", "Image_path", self.user_image_path)
+        config.set("User", "Diary_path", "")
         config.set("Data", "FormFillingDate", "")
 
         with open(user_config_path, "w") as config_file:
             config.write(config_file)
-
-        image = self.profile_image_label.pixmap()
-        image.save(r"Files/icons/User/Profile_picture.png")
-
+        self.stacked_widget.removeWidget(self.stacked_widget.currentWidget())
         self.main_menu()
 
     def main_menu(self):
@@ -208,9 +155,7 @@ class MainWindow(QMainWindow):
         buttons_h_box.addWidget(plans_button, alignment=Qt.AlignmentFlag.AlignHCenter)
         buttons_h_box.addStretch()
 
-        self.user_info = [self.user_name]#Потом будет добалена информация о прогрессе
-
-        profile_info_box = ws.ProfileInfoBox(self.user_image, self.user_info)
+        profile_info_box = ws.ProfileInfoBox(self.user_image_path, self.user_name)
         profile_info_box.clicked.connect(self.profile_window)
         profile_info_box.top12_button.clicked.connect(self.top_12)
 
@@ -238,7 +183,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(container)
 
     def profile_window(self):
-        profile_tab = wstabs.ProfileTab(self.user_image, self.user_info)
+        profile_tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
         self.stacked_widget.addWidget(profile_tab)
         self.next_window()
 
@@ -331,7 +276,7 @@ class MainWindow(QMainWindow):
             self.next_window()
 
         if obj_type == "Skills":
-            tab = wstabs.ProfileTab(self.user_image, self.user_info)
+            tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
 
         self.stacked_widget.addWidget(tab)
         self.next_window()
@@ -475,6 +420,7 @@ class MainWindow(QMainWindow):
         self.next_window()
 
     def plans_window(self):
+        self.tool_bar.hide()
         self.plans_tab = wstabs.Plans()
         self.plans_tab.week_plan_view.changesMade.connect(self.changesMade)
         self.plans_tab.changesSaved.connect(self.changesSaved)
@@ -495,7 +441,7 @@ class MainWindow(QMainWindow):
 
     def create_account(self):
         image = QLabel()
-        image.setPixmap(QPixmap(i_dir + "\Grad Icon.png"))
+        image.setPixmap(QPixmap(i_dir + "\grad_icon.png"))
 
         header_label = QLabel("Welcome!")
         header_label.setFont(QFont('Calibri', 36, 700))
@@ -508,8 +454,6 @@ class MainWindow(QMainWindow):
 
         self.name_edit = QLineEdit()
         self.name_edit.setFixedWidth(150)
-        self.password_edit = QLineEdit()
-        self.password_edit.setFixedWidth(150)
 
         done_button = QPushButton()
         done_button.setIcon(QIcon(i_dir + "\Check.png"))
@@ -518,10 +462,8 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout()
         grid.addWidget(self.profile_image_label, 0, 0, 0, 1)
-        grid.addWidget(name_label, 0, 1, alignment=Qt.AlignmentFlag.AlignRight)
-        grid.addWidget(self.name_edit, 0, 2, alignment=Qt.AlignmentFlag.AlignLeft)
-        grid.addWidget(password_label, 1, 1, alignment=Qt.AlignmentFlag.AlignRight)
-        grid.addWidget(self.password_edit, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft)
+        grid.addWidget(name_label, 0, 1, alignment=Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignHCenter)
+        grid.addWidget(self.name_edit, 0, 2, alignment=Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignHCenter)
 
         info_container = QWidget()
         info_container.setLayout(grid)

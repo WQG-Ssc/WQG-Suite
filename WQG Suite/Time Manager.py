@@ -192,8 +192,10 @@ class MainWindow(QMainWindow):
         if not self.isPaused:
             start_time = self.interval_start_time
             end_time = QTime.currentTime().toString()
+            current_time = end_time
         else:
             start_time, end_time = ["", ""]
+            current_time = QTime.currentTime().toString()
 
         config = configparser.ConfigParser()
         config.read(config_path)
@@ -202,8 +204,8 @@ class MainWindow(QMainWindow):
         config.set("Autosave", "Date", QDate().currentDate().toString("yyyy-MM-dd"))
         config.set("Data", "Record_time", self.record_time.toString())
         config.set("Data", "Remaining_time", str(self.main_timer_remaining_time))
-        config.set("Data", "Time_block_data", f"{self.current_block.start_time},{self.current_block.end_time},{self.current_block.task_id}")
-        config.set("Data", "Task_rtime", str(self.task_timer.remainingTime()))
+        if self.current_block:
+            config.set("Data", "Time_block_data", f"{self.current_block.start_time},{self.current_block.end_time},{self.current_block.task_id}")
         config.set("Data", "Completed_tasks", "|".join([",".join(item) for item in self.completed_tasks]))
         config.set("Data", "Last_open_date", self.current_date_str)
         config.set("Data", "NeedsRestore", "True")
@@ -212,9 +214,14 @@ class MainWindow(QMainWindow):
 
         if self.timer_remaining_time == -1: 
             self.timer_remaining_time = 0
+        task_rtime = self.task_timer.remainingTime()
+        if task_rtime == -1:
+            task_rtime = 0
+
+        config.set("Data", "Task_rtime", str(task_rtime))
         config.set("Data", "Additional_timer_remaining_time", str(self.timer_remaining_time))
 
-        if ws.calculate_msecs(end_time) > 86390000:
+        if ws.calculate_msecs(current_time) > 86390000 and self.current_block:
             self.write_statistics([start_time, end_time, self.current_date_str])
             self.interval_start_time = "00:00:00"
             self.current_date_str = QDate().fromString(self.current_date_str, "yyyy-MM-dd").addDays(1).toString("yyyy-MM-dd")
@@ -224,7 +231,7 @@ class MainWindow(QMainWindow):
 
     def initializeUI(self):
         self.setWindowTitle("WS Time Manager")
-        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.setFixedSize(450, 350)
         self.setWindowIcon(QIcon(app_icon_path))
 

@@ -3,7 +3,7 @@ import os, sys, math, random, configparser
 import DataManager
 from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QInputDialog, QMessageBox, QTreeWidgetItem, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QCompleter, QButtonGroup, QTreeWidget, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsTextItem, QRadioButton, QTimeEdit
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QKeySequence, QImage
-from PyQt6.QtCore import QRectF, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer
+from PyQt6.QtCore import QRectF, QRect, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer, pyqtProperty, QEasingCurve, QPropertyAnimation
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
 from plotly.io import to_html
@@ -15,7 +15,6 @@ class AddImageLabel(QLabel):
     imageAdded = pyqtSignal()
     def __init__(self, size=QSize(80, 80), shaping=True, default_image_path=r"Files\Icons\default_profile_image.png", ring=False):
         super().__init__()
-
         self.size = size
         self.shaping = shaping
         self.isImageAdded = False
@@ -111,7 +110,7 @@ def shapeImage(size, image):
 
 class ProfileInfoBox(QWidget):
     clicked = pyqtSignal()
-    def __init__(self, image, info, gotoProfile=True):
+    def __init__(self, image, name, gotoProfile=True):
         super().__init__()
         self.setFixedSize(330, 157)
         self.gotoProfile = gotoProfile
@@ -122,14 +121,14 @@ class ProfileInfoBox(QWidget):
 
         self.profile_image = QLabel()
         size = QSize(90, 90)
-        image = image.scaled(QSize(size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        image = QPixmap(image).scaled(QSize(size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         image_size = image.size()
         height = size.height()
         if image_size.height() > height or image_size.width() > height:
             image = image.copy(image_size.width() // 2 - height / 2, image_size.height() // 2 - height / 2, size.width(), height)
         self.profile_image.setPixmap(shapeImage(size, image))
 
-        self.user_name = QLabel(info[0])
+        self.user_name = QLabel(name)
         self.user_name.setFont(QFont('Calibri', 24))
 
         diary_button = QPushButton()
@@ -239,6 +238,7 @@ class CompletingGoalsWidget(QWidget):
             item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), goal[0])
         item.setTextAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
         item.setFlags(~Qt.ItemFlag.ItemIsSelectable)
+        item.setFlags(~Qt.ItemFlag.ItemIsEditable)
         return item
 
     def paintEvent(self, event):
@@ -652,15 +652,6 @@ class GoalTreeItem(QWidget):
         if QMessageBox.question(self, "Delete goal", "Do you want to delete this goal?") == QMessageBox.StandardButton.Yes:
             self.goalDeleted.emit(self.goal_id)
 
-    #def updateWidget(self, goal_id, goal_name, d_diff, goal_progress, isGroup):
-    #    self.goal_id = goal_id
-    #    self.goal_name = goal_name
-    #    self.d_diff = d_diff
-    #    self.isGroup = isGroup
-    #    self.goal_progress = goal_progress
-    #    self.label.setText(self.goal_id + " " + self.goal_name)
-    #    self.icon.updateGoalProgressBar(self.goal_progress, self.d_diff)
-
     def contextMenuEvent(self, event):
         menu = QMenu()
         if self.isGroup:
@@ -1065,7 +1056,7 @@ class ListWidgetItem(QListWidgetItem):
         self.setText(text)
 
 class SkillCharactWidget(QWidget):
-    def __init__(self, text, value, data_type):
+    def __init__(self, text, value, data_type, spacing=False):
         super().__init__()
         label = QLabel(text)
         self.name = text
@@ -1078,9 +1069,11 @@ class SkillCharactWidget(QWidget):
         h_box.addWidget(label)
         if data_type != "displaying charact":
             self.value_edit = QLineEdit(value)
+            self.value_edit.setFixedWidth(108)
             h_box.addWidget(self.value_edit)
-
         h_box.addWidget(self.delete_button)
+        if spacing:
+            h_box.addSpacing(21)
         self.setLayout(h_box)
         self.setFixedWidth(250)
 
@@ -1308,7 +1301,10 @@ class TimeBlock(QGraphicsItem):
             if metrics16.horizontalAdvance(self.name) > 222:
                 self.name = self.name[:11]
             painter.setFont(font16)
-            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, self.name)
+            if self.block_rect[2] <= 27:
+                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 15, self.name)
+            else:
+                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, self.name)
             header_text_width = metrics16.horizontalAdvance(self.name)
             if not header_text_width > 160:
                 painter.setFont(font10)
@@ -1332,11 +1328,20 @@ class TimeBlock(QGraphicsItem):
             self.setToolTip(f"{self.name} {period} {time}")
 
         if self.inPlan:
-            if self.block_rect[2] < 54:
-                metrics = QFontMetrics(QFont("Calibri", 10))
-                painter.drawPixmap(metrics.horizontalAdvance(period) + metrics.horizontalAdvance(self.name) + 5, self.block_rect[1], 15, 7, QPixmap(r"Files\icons\start task small.png" ))
-            else:
-                painter.drawPixmap(10, self.block_rect[1] + 25, 23, 23, QPixmap("Files\icons\start task.png"))
+            metrics = QFontMetrics(font10)
+            if self.block_rect[2] >= 54:
+                self.start_button_rect = QRect(10, self.block_rect[1] + 25, 23, 23)
+                painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task.png"))
+            elif self.block_rect[2] >= 27:
+                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(self.name) + 16, self.block_rect[1] + 10, 15, 8)
+                painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
+            elif self.block_rect[2] >= 18:
+                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(self.name) + 16, self.block_rect[1] + 5, 15, 8)
+                painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
+            elif self.block_rect[2] >= 9:
+                self.start_button_rect = QRect(metrics8.horizontalAdvance(period) + metrics8.horizontalAdvance(self.name) + 16, self.block_rect[1], 15, 8)
+                painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
+            self.start_button_rect.setY(self.start_button_rect.y() - self.block_rect[1])
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
@@ -1359,7 +1364,6 @@ class TimeBlock(QGraphicsItem):
             #Корректируем координаты (шаг для x - один день, для y - 15 минут)
             x = ((x - 112) // self.width) * self.width + self.width
             y = y // 9 * 9
-
             block_x = x + self.block_rect[0]
             block_y = y + self.block_rect[1]
 
@@ -1587,19 +1591,12 @@ class WeekPlanView(QGraphicsView):
             pos = QPoint(mapped.x(), mapped.y())
             item = self.itemAt(event.pos())
             if isinstance(item, TimeBlock):
-                start_msecs = calculate_msecs(item.start_time)
-                y = pos.y() - start_msecs * 0.00001
+                y = pos.y() - calculate_msecs(item.start_time) * 0.00001
                 x = pos.x()
-                print(f"y:{y}")
-                if (calculate_msecs(item.end_time) - calculate_msecs(item.start_time)) * 0.00001 >= 54:
-                    if y >= 25 and y <= 48 and x >= 10 and x <= 33 and item.isEnabled():
-                        self.startTask.emit(item)
-                else:
-                    period = item.start_time[:-3] + "-" + item.end_time[:-3]
-                    metrics = QFontMetrics(QFont("Calibri", 10))
-                    if y <= 7 and x >= metrics.horizontalAdvance(period) + metrics.horizontalAdvance(item.name) + 5 and x <= metrics.horizontalAdvance(period) + metrics.horizontalAdvance(item.name) + 8:
-                        self.startTask.emit(item)
-        return super().mousePressEvent(event)
+                print(item.start_button_rect.contains(x, y), item.start_button_rect)
+                if item.start_button_rect.contains(x, y):
+                    self.startTask.emit(item)
+                return super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self.creating_item:
@@ -1762,6 +1759,7 @@ class TimeBlockDialog(QDialog):
     def tasks_settings(self):
         self.dialog = QDialog()
         self.dialog.setModal(True)
+        self.dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.task_line_edit = QLineEdit()
         self.task_line_edit.setPlaceholderText("Enter task name")
         self.skills_list = SkillCharactListWidget()
@@ -1822,13 +1820,14 @@ class TimeBlockDialog(QDialog):
     def update_time(self):
         start_time = calculate_msecs(self.from_te.time().toString("hh:mm:ss"))
         end_time = calculate_msecs(self.to_te.time().toString("hh:mm:ss"))
-        self.time_label.setText(f"Time: {to_str(int(end_time - start_time))}") 
+        self.time_label.setText(f"Time: {to_str(int(end_time - start_time))}")
 
     def add_skill(self, text, value=0):
         if text not in self.skills_list.addedItemsText:
             widget = SkillCharactWidget(text, "", "Skills")
             widget.value_edit.setText(str(value))
             widget.setFixedWidth(165)
+            widget.value_edit.setFixedWidth(75)
             item = QListWidgetItem()
             item.setSizeHint(widget.sizeHint())
             widget.delete_button.clicked.connect(lambda: self.remove_skill(item))
@@ -1970,3 +1969,39 @@ def getBusyValue(task_id):
     else:
         busy = 1
     return busy
+
+class AnimationDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet("background-color: transparent")
+        self.setFixedSize(200, 200)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.icon_label = icon_label(self)
+        self.icon_label.setPixmap(QPixmap(r"Files\Icon.png").scaled(QSize(200, 200), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
+        self.animation = QPropertyAnimation(self.icon_label, b"arc")
+        self.animation.setEasingCurve(QEasingCurve.Type.InQuart)
+        self.animation.setDuration(1000)
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(360)
+        self.animation.start()
+        self.show()
+
+class icon_label(QLabel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.painter = QPainter()
+        self.value = 360
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self.painter.begin(self)
+        self.painter.setPen(QPen(Qt.GlobalColor.black, 9))
+        self.painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.painter.drawArc(4, 4, 192, 192, 90 * 16, self.value * 16)
+        self.painter.end()
+
+    def set_color(self, value):
+        self.value = 360 - value
+        self.update()
+    arc = pyqtProperty(int, fset=set_color)
