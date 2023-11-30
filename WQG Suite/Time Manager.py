@@ -1,6 +1,5 @@
 # -*- coding: cp1251 -*-
 import sys, configparser, os
-from turtle import isvisible
 from win10toast import ToastNotifier
 import sqlite3 as sql
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QWidget, QSizePolicy, QMessageBox, QDialog, QStackedWidget, QLineEdit, QCheckBox, QFileDialog, QGraphicsLineItem
@@ -8,16 +7,15 @@ from PyQt6.QtGui import QAction, QFont, QIcon, QPen, QColor
 from PyQt6.QtCore import Qt, QTime, QTimer, QSize, QDate, QEvent
 import WSwidgets as ws
 import DataManager, subprocess
+from style_sheet import style_sheet
 
 data_base = r"Files\data\main_test.db"
 config_path = r"Files\config\time_manager\config_test.ini"
 version = "0.1.1 public"
 app_icon_path = os.path.abspath(r"Files\icons\Time Manager icon.ico")
 
-style_sheet = """
-QPushButton{
-    color: #FFD300
-    }
+
+style_sheet2 = """
 QPushButton#Round{
     background-color: #000000;
     border: 2px solid #FFD300;
@@ -45,37 +43,33 @@ QPushButton::pressed#YellowWhite{
     background-color: #7F6900;
     color: #7a7a7a;
     }
-QLineEdit{
+QPushButton#Icon{
+    background-color: black;
+    color: #FFD300
+    }
+QPushButton#Icon::pressed{
+    border: 1px solid #FFD300
+    }
+QLineEdit#Task{
     background-color: #000000;
     color: #FFD300;
     border: none;
     font: 16pt 'Segoe UI'
     }
 QLineEdit#Timer{
-    font: 12pt 'Segoe UI'
+    font: 12pt 'Segoe UI';
+    border: none;
     }
-QLabel{
+QLineEdit#TimerTime{
+    background-color: #000000;
     color: #FFD300;
+    border: none;
     font: 16pt 'Segoe UI'
     }
-QLabel#Info{
+QLabel#Title{
     color: #FFD300;
-    font: 12pt 'Segoe UI'
-    }
-QWidget{
-    background-color: #000000
-    }
-QListWidget{
-    border: 1px solid #FFD300;
-    color: #FFD300;
-    }
-QMenu{
-    color: #FFD300
-    }
-QMenu::item:selected{
-    background-color: #7F6900
+    font: 16pt 'Segoe UI'
     }"""
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,12 +260,14 @@ class MainWindow(QMainWindow):
         self.timers_button = QPushButton()
         self.timers_button.setFixedSize(22, 22)
         self.timers_button.clicked.connect(self.set_timers)
+        self.timers_button.setObjectName("Icon")
         if self.isTimerEnabled:
             self.timers_button.setIcon(QIcon(r"Files\Icons\hourglass_on.png"))
         else:
             self.timers_button.setIcon(QIcon(r"Files\Icons\hourglass_off.png"))
 
         self.title_edit = QLineEdit()
+        self.title_edit.setObjectName("Task")
         self.title_edit.setReadOnly(True)
         self.title_edit.setPlaceholderText("Select a task")
 
@@ -280,6 +276,7 @@ class MainWindow(QMainWindow):
         info_button.setIconSize(QSize(25, 25))
         info_button.setToolTip("Info")
         info_button.clicked.connect(self.show_info)
+        info_button.setObjectName("Icon")
 
         plan_button = QPushButton()
         plan_button.setCheckable(True)
@@ -287,9 +284,29 @@ class MainWindow(QMainWindow):
         plan_button.setIconSize(QSize(25, 25))
         plan_button.setToolTip("Plan")
         plan_button.toggled.connect(self.show_plan)
+        plan_button.setObjectName("Icon")
+
+        sync_button = QPushButton()
+        sync_button.clicked.connect(self.synchronize_plan)
+        sync_button.setIcon(QIcon(r"Files\icons\sync.png"))
+        sync_button.setIconSize(QSize(25, 25))
+        sync_button.setObjectName("Icon")
+
+        phone_button = QPushButton()
+        phone_button.clicked.connect(self.continue_on_phone)
+        phone_button.setIcon(QIcon(r"Files\icons\to phone.png"))
+        phone_button.setIconSize(QSize(25, 25))
+        phone_button.setObjectName("Icon")
+
+        listen_button = QPushButton("listen")
+        listen_button.clicked.connect(self.listen)
+        listen_button.setMinimumWidth(50)
 
         buttons_h_box = QHBoxLayout()
         buttons_h_box.addStretch()
+        buttons_h_box.addWidget(listen_button)
+        buttons_h_box.addWidget(sync_button)
+        buttons_h_box.addWidget(phone_button)
         buttons_h_box.addWidget(info_button)
         buttons_h_box.addWidget(plan_button)
 
@@ -338,6 +355,7 @@ class MainWindow(QMainWindow):
                     self.current_block = block
                     self.title_edit.setText(self.current_block.name)
                     self.expand_line_edit()
+                    print(351)
                 else:
                     print(311)
                     for task in self.completed_tasks:
@@ -371,6 +389,23 @@ class MainWindow(QMainWindow):
         self.title_edit.textChanged.connect(self.expand_line_edit)
 
         self.stacked_widget.addWidget(container)
+
+    def listen(self):
+        data = DataManager.listen()
+        if data:
+            self.completed_tasks = data
+            QMessageBox.information(self, "Success", "Success")
+        else:
+            QMessageBox.warning(self, "Failed to get data", "Failed to get data")
+
+    def synchronize_plan(self):
+        DataManager.synchronizePlans()
+
+    def continue_on_phone(self):
+        if not self.current_block:
+            DataManager.continue_on_phone(self.completed_tasks)
+        else:
+            QMessageBox.warning(self, "Warning", "Finish current task to continue on the phone")
 
     def update_time_line(self, time):
         self.time_line.prepareGeometryChange()
@@ -448,7 +483,7 @@ class MainWindow(QMainWindow):
 
     def set_timers(self):
         title = QLabel("Add timer for notifications")
-
+        title.setObjectName("Title")
         self.timer_name_edit = QLineEdit()
         self.timer_name_edit.setPlaceholderText("Add title...")
         self.timer_name_edit.setMaxLength(25)
@@ -458,15 +493,18 @@ class MainWindow(QMainWindow):
         is_rec_button.setCheckable(True)
         is_rec_button.setFixedSize(22, 22)
         is_rec_button.clicked.connect(lambda: self.toggle_recurring(is_rec_button))
+        is_rec_button.setObjectName("Icon")
 
         t_edit = QLineEdit()
         t_edit.setFixedWidth(80)
         t_edit.setInputMask("00:00:00")
+        t_edit.setObjectName("TimerTime")
 
         self.toggle_timer_button = QPushButton()
         self.toggle_timer_button.setFixedSize(22, 22)
         self.toggle_timer_button.setCheckable(True)
         self.toggle_timer_button.clicked.connect(lambda: self.toggle_timer(self.toggle_timer_button, t_edit))
+        self.toggle_timer_button.setObjectName("Icon")
 
         self.timer_note = QLineEdit()
         self.timer_note.setPlaceholderText("Add note...")
@@ -475,6 +513,7 @@ class MainWindow(QMainWindow):
         done_button = QPushButton("Done")
         done_button.setFixedWidth(45)
         done_button.clicked.connect(lambda: self.save_timers(t_edit))
+        done_button.setObjectName("Icon")
 
         if self.timer_data[0]:
             t_edit.setText(self.timer_data[0])
@@ -684,14 +723,15 @@ class MainWindow(QMainWindow):
 
     def clear_timer(self):
         if self.isRecordStarted:
-            self.current_block.setCompleted()
-            current_time = QTime.currentTime() 
-            if current_time.msecsSinceStartOfDay() < ws.calculate_msecs(self.current_block.end_time) and current_time.msecsSinceStartOfDay() > ws.calculate_msecs(self.current_block.start_time):
-                DataManager.updateMainData("time_block", [current_time.toString("hh:mm:ss"), self.current_block, self.current_date_str])
-                self.current_block.prepareGeometryChange()
-                self.current_block.end_time = QTime.currentTime().toString("hh:mm:ss")
-                self.current_block.updateTime()
-            self.completed_tasks.append([self.current_block.start_time, self.current_block.end_time, self.current_block.task_id])
+            if self.current_block:
+                self.current_block.setCompleted()
+                current_time = QTime.currentTime() 
+                if current_time.msecsSinceStartOfDay() < ws.calculate_msecs(self.current_block.end_time) and current_time.msecsSinceStartOfDay() > ws.calculate_msecs(self.current_block.start_time):
+                    DataManager.updateMainData("time_block", [current_time.toString("hh:mm:ss"), self.current_block, self.current_date_str])
+                    self.current_block.prepareGeometryChange()
+                    self.current_block.end_time = QTime.currentTime().toString("hh:mm:ss")
+                    self.current_block.updateTime()
+                self.completed_tasks.append([self.current_block.start_time, self.current_block.end_time, self.current_block.task_id])
             if not self.isPaused:
                 self.toggle_record()
             self.title_edit.setText("")
@@ -751,7 +791,7 @@ class MainWindow(QMainWindow):
         config.set("Data", "Record_time", self.record_time.toString())
         config.set("Data", "Completed_tasks", "|".join([",".join(item) for item in self.completed_tasks]))
 
-        if self.current_block:
+        if self.current_block and self.isRecordStarted:
             config.set("Data", "Time_block_data", f"{self.current_block.start_time},{self.current_block.end_time},{self.current_block.task_id}")
             config.set("Data", "Task_rtime", str(self.task_timer.remainingTime()))
         else:
@@ -786,6 +826,6 @@ class MainWindow(QMainWindow):
             
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    app.setStyleSheet(style_sheet)
+    app.setStyleSheet(style_sheet + style_sheet2)
     window = MainWindow()
     sys.exit(app.exec())

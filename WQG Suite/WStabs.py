@@ -134,11 +134,14 @@ class GoalsTab(QWidget):
         self.standard_characts = ["", "Name", "Hours", "Benefit", "limit date", "Priority", "State", "ID"]
         self.tree_widget = QTreeWidget()
         self.tree_widget.setStyleSheet("QTreeWidget::item{height: 140px}")
-        self.tree_widget.setColumnWidth(0, 135)
         self.tree_widget.setIconSize(QSize(97, 97))
         self.tree_widget.setSortingEnabled(True)
 
         self.updateWidget()
+
+        self.tree_widget.setColumnWidth(0, 135)
+        self.tree_widget.setColumnWidth(6, 120)
+        self.tree_widget.setColumnWidth(4, 135)
 
         h_box = QHBoxLayout()
         h_box.setContentsMargins(300, 85, 250, 85)
@@ -151,6 +154,7 @@ class GoalsTab(QWidget):
         settings_button = QPushButton()
         settings_button.setIcon(QIcon(i_dir + r"\Settings.png"))
         settings_button.setObjectName("Menu")
+        settings_button.setFixedSize(16, 16)
         settings_button.clicked.connect(self.characts_displaying_settings)
         
         self.add_button = QPushButton()
@@ -163,7 +167,7 @@ class GoalsTab(QWidget):
 
         v_box.addStretch()
         v_box.addWidget(showing_checkbox, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_box.addWidget(settings_button)
+        v_box.addWidget(settings_button, alignment=Qt.AlignmentFlag.AlignHCenter)
         v_box.addWidget(self.add_button)
         h_box.addLayout(v_box)
 
@@ -859,6 +863,7 @@ class GoalTab(QWidget):
         self.update_goal_tree()
         self.goals_dict[self.current_goal_id].loadData()
         self.goals_dict[self.current_goal_id].displayData()
+        self.goal_list_update_req.emit()
 
     def save_goal(self, previous=None):
         #1 - name lineEdit, 2 - image list, 3 - note textEdit, 4 - limit_date_label, 5 - progress_label, 6 - state_label, 7 - isgroup, 8-12 - characts lineEdits
@@ -1620,67 +1625,68 @@ class StatisticsEditor(QDialog):
                     QMessageBox.warning(self, "Not all the cells are filled", "Fill all the cells to save data")
 
             if index == 2 and self.stats:
-                    task_id_list = []
-                    mode = self.mode_combo.currentIndex()
-                    print(f"stats:{self.stats}")
-                    if mode == 0:
-                        for day_stat in self.stats:
-                            print(f"day_stats:{day_stat}")
-                            if len(day_stat) == 4:
-                                if any(day_stat):
-                                    task_id_list.append(day_stat[2])
-                                    DataManager.addSkillStat(day_stat[2], (ws.calculate_msecs(day_stat[1]) - ws.calculate_msecs(day_stat[0])) / 3600000, day_stat[3])
-                                    day_stat.append(1)#busy value
-                                    success = DataManager.saveMainData("statistics", day_stat)
-                            else:
-                                success = False
-                    else:
-                        time_dict = {}
-                        for day_stat in self.stats:
-                            if len(day_stat) == 3:
-                                if any(day_stat):
-                                    date = day_stat[2]
-                                    if date in time_dict:
-                                        start_time = time_dict[date]
-                                    else:
-                                        start_time = "0:00:00"
+                task_id_list = []
+                mode = self.mode_combo.currentIndex()
+                print(f"stats:{self.stats}")
+                if mode == 0:
+                    for day_stat in self.stats:
+                        print(f"day_stats:{day_stat}")
+                        if len(day_stat) == 4:
+                            if any(day_stat):
+                                task_id_list.append(day_stat[2])
+                                DataManager.addSkillStat(day_stat[2], (ws.calculate_msecs(day_stat[1]) - ws.calculate_msecs(day_stat[0])) / 3600000, day_stat[3])
+                                day_stat.append(1)#busy value
+                                success = DataManager.saveMainData("statistics", day_stat)
+                        else:
+                            success = False
+                else:
+                    time_dict = {}
+                    for day_stat in self.stats:
+                        if len(day_stat) == 3:
+                            if any(day_stat):
+                                date = day_stat[2]
+                                if date in time_dict:
+                                    start_time = time_dict[date]
+                                else:
+                                    start_time = "0:00:00"
 
-                                    task_id_list.append(day_stat[1])
-                                    end_time = ws.to_str(int(ws.calculate_msecs(start_time) + (float(day_stat[0]) * 3600000)))
-                                    time_dict[date] = end_time
-                                    print([start_time, end_time, day_stat[1], date])
-                                    DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
-                                    success = DataManager.saveMainData("statistics", [start_time, end_time, day_stat[1], date, 1])
-                            else:
-                                success = False
-                    task_id_list = list(set(task_id_list))
+                                task_id_list.append(day_stat[1])
+                                end_time = ws.to_str(int(ws.calculate_msecs(start_time) + (float(day_stat[0]) * 3600000)))
+                                time_dict[date] = end_time
+                                print([start_time, end_time, day_stat[1], date])
+                                DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
+                                success = DataManager.saveMainData("statistics", [start_time, end_time, day_stat[1], date, 1])
+                        else:
+                            success = False
+                task_id_list = list(set(task_id_list))
 
-                    #Recalculate progress of goals
-                    for task_id in task_id_list:
-                        if len(task_id.split(".")) > 1: #determinating if task_id is goal_id or not
-                            print("=====")
-                            print(f"task_id:{task_id}")
-                            goal_data = DataManager.loadMainData("goal", task_id, one=True)
-                            print(f"goal_data:{goal_data}")
-                            DataManager.recalculateProgress(task_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
-                            DataManager.updateMainData("goal_state", ["completing", task_id])
+                #Recalculate progress of goals
+                for task_id in task_id_list:
+                    if len(task_id.split(".")) > 1: #determinating if task_id is goal_id or not
+                        print("=====")
+                        print(f"task_id:{task_id}")
+                        goal_data = DataManager.loadMainData("goal", task_id, one=True)
+                        print(f"goal_data:{goal_data}")
+                        DataManager.recalculateProgress(task_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
+                        DataManager.updateMainData("goal_state", ["completing", task_id])
 
-                            if len(task_id.split(".")) > 2:
-                                print(2)
-                                layers = task_id.split(".")
-                                while len(layers) > 2:
-                                    goal_id = ".".join(layers[:-1])
-                                    print(f"supergoal recalc:{goal_id}")
-                                    goal_data = DataManager.loadMainData("goal", goal_id, one=True)
-                                    DataManager.updateMainData("goal_state", ["completing", task_id])
-                                    DataManager.recalculateProgress(goal_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
-                                    layers.pop(-1)
+                        if len(task_id.split(".")) > 2:
+                            print(2)
+                            layers = task_id.split(".")
+                            while len(layers) > 2:
+                                goal_id = ".".join(layers[:-1])
+                                print(f"supergoal recalc:{goal_id}")
+                                goal_data = DataManager.loadMainData("goal", goal_id, one=True)
+                                DataManager.updateMainData("goal_state", ["completing", task_id])
+                                DataManager.recalculateProgress(goal_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
+                                layers.pop(-1)
 
-                    DataManager.recalculateSkills()
+                DataManager.recalculateSkills()
+                DataManager.recalculateDaysWorkTime()
             if success == True:
                 QMessageBox.information(self, "Data has been written", "Data has been written")
             elif success == False:
-                QMessageBox.information(self, "An error occured", "Data has not been written")
+                QMessageBox.warning(self, "An error occured", "Data has not been written")
         except Exception as error:
             QMessageBox.critical(self, "An error occured", f"Error: {error}")
 
@@ -1862,6 +1868,10 @@ class PhrasesEditor(QDialog):
         ok_button.setFixedWidth(20)
         ok_button.clicked.connect(self.close)
 
+        parser = configparser.ConfigParser()
+        parser.read(user_config_path)
+        self.last_showed_phrase = parser.get("Data", "last_showed_phrase")
+
         h_box = QHBoxLayout()
         h_box.addWidget(edit_authors_button)
         h_box.addWidget(self.date_checkbox)
@@ -1949,6 +1959,13 @@ class PhrasesEditor(QDialog):
         self.phrases_om.load_data()
 
     def delete_phrase(self):
+        if self.phrase_edit.text() == self.last_showed_phrase:
+            parser = configparser.ConfigParser()
+            parser.read(user_config_path)
+            parser.set("Data", "last_showed_phrase", "")
+            parser.set("Data", "last_showed_phrase_date", "")
+            with open(user_config_path, "w") as config_file:
+                parser.write(config_file)
         if self.phrases_om.isSelected:
             DataManager.deleteOtherData("phrase", self.phrase_edit.text())
         self.author_edit.clear()

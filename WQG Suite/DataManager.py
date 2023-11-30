@@ -1,17 +1,18 @@
 import sqlite3 as sql
 import WSwidgets as ws
-import re
+import re, socket
 from PyQt6.QtCore import QDate
 main_db = r"Files\data\main_test.db"
 other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        try: 
-            return func(*args, **kwargs)
-        except Exception as error:
-            print(f'An error occurred in {func.__name__}: {error}')
-            return False
+        return func(*args, **kwargs)
+        #try: 
+        #    return func(*args, **kwargs)
+        #except Exception as error:
+        #    print(f'An error occurred in {func.__name__}: {error}')
+        #    return False
     return wrapper
 
 @exception_handler
@@ -228,6 +229,7 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Plans WHERE date == ?", args)
 
     if data_type == "clear table":
+        print(f"args:{args}")
         cur.execute(f"DELETE FROM {args[0]}")
 
     if data_type == "time block":
@@ -261,7 +263,7 @@ def loadOtherData(data_type, *args, one=False):
         cur.execute("SELECT name, author FROM Phrases WHERE date == ?", args)
 
     if data_type == "phrases":
-        cur.execute("SELECT * FROM Phrases")
+        cur.execute("SELECT name, author, date FROM Phrases")
 
     if data_type == "top 12":
         cur.execute("SELECT RowID, goal_id FROM Top12")
@@ -504,3 +506,95 @@ def addSkillStat(task_id, task_time, date):
     else:
         return None
     saveMainData("skills_stats", [skill, date, skill_value, task_id])
+
+def recalculateDaysWorkTime():
+    conn = sql.connect(main_db)
+    cur = conn.cursor()
+    cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE busy == 1")
+    stats = cur.fetchall()
+    if any(stats):
+        last_date = ""
+        day_stats = {}
+        for stat in stats:
+            if stat[2] == last_date:
+                day_stats[stat[2]] += (ws.calculate_msecs(stat[1]) - ws.calculate_msecs(stat[0])) / 3600000
+            else:
+                day_stats[stat[2]] = (ws.calculate_msecs(stat[1]) - ws.calculate_msecs(stat[0])) / 3600000
+            last_date = stat[2]
+
+        for date, value in day_stats.items():
+            cur.execute(f"SELECT date FROM Days WHERE date == '{date}'")
+            if cur.fetchone():
+                cur.execute(f"UPDATE Days SET 'Work time' == {value} WHERE date == '{date}'")
+            else:
+                cur.execute(f"INSERT INTO Days ('Work time', date) VALUES ({value}, '{date}')")
+    conn.commit()
+    conn.close()
+
+def synchronizePlans():
+    conn = sql.connect(main_db)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM Plans")
+    data = cur.fetchall()
+    if data:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(("192.168.0.106", 1234))
+        server.listen(1)
+        user, adress = server.accept()
+        data_str = ""
+        for record in data:
+            record = [str(item) for item in record]
+            data_str += ",".join(record) + "|"
+        data_str = data_str.rstrip("|")
+        
+        user.send(data_str.encode("utf-8"))
+        print(f"data: {data_str}")
+        print(user.recv(100000).decode("utf-8"))
+        server.close()
+    conn.close()
+
+def continue_on_phone(tasks):
+    if tasks:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(("192.168.0.106", 1234))
+        server.listen(1)
+        user, adress = server.accept()
+        task_str = ""
+        for task in tasks:
+            task_str += ",".join(task) + "|"
+        print(f"data: {task_str}")
+        task_str = task_str.rstrip("|")
+        user.send(task_str.encode("utf-8"))
+        server.close()
+
+def listen():
+    conn = sql.connect(main_db)
+    cur = conn.cursor()
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("192.168.0.106", 1234))
+    server.listen(1)
+    user, adress = server.accept()
+    data = user.recv(12582912).decode("utf-8")
+    print(data)
+    c_task_str, main_stats_str, plans_str = data.split("$")
+    completed_tasks = []
+    if c_task_str:
+        for block in c_task_str.split("|"):
+            completed_tasks.append(block.split(","))
+
+    if main_stats_str:
+        for record in main_stats_str.split("|"):
+            record = record.split(",")
+            cur.execute(f"INSERT INTO Main_statistics (start_time, end_time, task_id, date, busy) VALUES ('{record[0]}', '{record[1]}', '{record[2]}', '{record[3]}', {record[4]})")
+
+    if plans_str:
+        plans = plans_str.split("|")
+        cur.execute(f"DELETE FROM Plans WHERE date == '{QDate().currentDate().toString('yyyy-MM-dd')}'")
+        for record in plans:
+            record = record.split(",")
+            cur.execute(f"INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES ('{record[0]}', '{record[1]}', '{record[2]}', '{record[3]}', {record[4]})")
+
+    conn.commit()
+    conn.close()
+    server.close()
+    return completed_tasks

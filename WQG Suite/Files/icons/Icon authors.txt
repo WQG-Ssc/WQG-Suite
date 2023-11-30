@@ -21,3 +21,7 @@ unknown author of plotly emdedding
 <a href="https://www.flaticon.com/free-icons/finish" title="finish icons">Finish icons created by Phoenix Group - Flaticon</a>
 
 <a href="https://www.flaticon.com/ru/free-icons/" title="журнал иконки">Журнал иконки от SBTS2018 - Flaticon</a>
+
+<a href="https://www.flaticon.com/ru/free-icons/-" title="следующее сообщение иконки">Следующее сообщение иконки от Ranah Pixel Studio - Flaticon</a>
+
+<a href="https://www.flaticon.com/ru/free-icons/" title=" иконки"> иконки от Prosymbols Premium - Flaticon</a>

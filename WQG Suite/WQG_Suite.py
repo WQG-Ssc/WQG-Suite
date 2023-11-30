@@ -1,11 +1,10 @@
 # -*- coding: cp1251 -*-
 import os, sys, configparser, subprocess, DataManager
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QGraphicsScene, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QComboBox, QCheckBox
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, QDate, QTimer
-from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QPainter, QPen, QBrush, QColor, QRegularExpressionValidator
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QFileDialog, QComboBox
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction
 from style_sheet import style_sheet
 import WSwidgets as ws
-import WSobjects as wsobj
 import WStabs as wstabs
 import sqlite3 as sql
 
@@ -55,6 +54,8 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("Files\Icon.png"))
         self.anyChangesMade = False
         self.isGoalListNeedsToBeUpdated = False
+        self.dialog = None
+        self.dialog1 = None
         self.setUpMainWindow()
         self.showMaximized()
 
@@ -113,6 +114,8 @@ class MainWindow(QMainWindow):
         config.set("User", "Image_path", self.user_image_path)
         config.set("User", "Diary_path", "")
         config.set("Data", "FormFillingDate", "")
+        config.set("Data", "last_showed_phrase", "")
+        config.set("Data", "last_showed_phrase_date", "")
 
         with open(user_config_path, "w") as config_file:
             config.write(config_file)
@@ -159,13 +162,13 @@ class MainWindow(QMainWindow):
         profile_info_box.clicked.connect(self.profile_window)
         profile_info_box.top12_button.clicked.connect(self.top_12)
 
-        completing_goals_widget = ws.CompletingGoalsWidget()
+        self.completing_goals_widget = ws.CompletingGoalsWidget()
         today_phrase = ws.TodayPhraseWidget()
 
         left_v_box = QVBoxLayout()
         left_v_box.setSpacing(0)
         left_v_box.addWidget(profile_info_box, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        left_v_box.addWidget(completing_goals_widget, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        left_v_box.addWidget(self.completing_goals_widget, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         left_v_box.addStretch()
 
         main_h_box = QHBoxLayout()
@@ -184,10 +187,10 @@ class MainWindow(QMainWindow):
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
-        self.stacked_widget.addWidget(profile_tab)
-        self.next_window()
+        self.next_window(profile_tab)
 
     def previous_window(self):
+        print(self.stacked_widget.currentIndex())
         if self.stacked_widget.currentIndex() > 0:
             current_widget = self.stacked_widget.currentWidget()
             if self.anyChangesMade:
@@ -199,8 +202,11 @@ class MainWindow(QMainWindow):
                 self.isGoalListNeedsToBeUpdated = False
             self.stacked_widget.removeWidget(current_widget)
             current_widget.deleteLater()
+        if self.stacked_widget.currentIndex() == 0:
+            self.completing_goals_widget.load_data()
 
-    def next_window(self):
+    def next_window(self, widget):
+        self.stacked_widget.addWidget(widget)
         self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() + 1)
 
     def create_toolbar(self):
@@ -272,14 +278,10 @@ class MainWindow(QMainWindow):
             tab.add_button.clicked.connect(self.goal_window)
             tab.sectionMoved.connect(self.changesMade)
 
-            self.stacked_widget.addWidget(tab)
-            self.next_window()
-
         if obj_type == "Skills":
             tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
 
-        self.stacked_widget.addWidget(tab)
-        self.next_window()
+        self.next_window(tab)
         self.dialog.close()
 
     def toggle_toolbar(self):
@@ -309,15 +311,15 @@ class MainWindow(QMainWindow):
         self.dialog.show()
 
     def edit_profile(self):
-        self.dialog = QDialog()
-        self.dialog.setModal(True)
+        self.dialog1 = QDialog()
+        self.dialog1.setModal(True)
         parser = configparser.ConfigParser()
         parser.read(user_config_path, encoding="cp1251")
         name = parser.get("User", "Name")
         image_path = parser.get("User", "Image_path")
         self.diary_path = parser.get("User", "Diary_path")
 
-        self.user_image = ws.AddImageLabel()
+        self.user_image = ws.AddImageLabel(ring=True)
         self.user_image.setImage(image_path)
         self.name_edit = QLineEdit(name)
         diary_button = QPushButton("Edit diary path")
@@ -329,8 +331,8 @@ class MainWindow(QMainWindow):
         v_box.addWidget(self.name_edit)
         v_box.addWidget(diary_button)
         v_box.addWidget(ok_button)
-        self.dialog.setLayout(v_box)
-        self.dialog.show()
+        self.dialog1.setLayout(v_box)
+        self.dialog1.show()
 
     def save_profile(self):
         if self.name_edit.text():
@@ -350,12 +352,12 @@ class MainWindow(QMainWindow):
         self.diary_path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *.rtf *docx)")
 
     def edit_phrases(self):
-        self.dialog = wstabs.PhrasesEditor()
+        self.dialog1 = wstabs.PhrasesEditor()
 
     def clear_db_dialog(self):
-        self.dialog = QDialog()
-        self.dialog.setWindowTitle("Clear table")
-        self.dialog.setModal(True)
+        self.dialog1 = QDialog()
+        self.dialog1.setWindowTitle("Clear table")
+        self.dialog1.setModal(True)
         table_combo = QComboBox()
         table_combo.addItems(["Main_statistics", "Goals", "Skills", "Branches", "Days", "Graphs", "Characteristics", "Skills_statistics", "Tasks", "Plans"])
         clear_button = QPushButton("Clear")
@@ -363,41 +365,30 @@ class MainWindow(QMainWindow):
         v_box = QVBoxLayout()
         v_box.addWidget(table_combo)
         v_box.addWidget(clear_button)
-        self.dialog.setLayout(v_box)
-        self.dialog.show()
+        self.dialog1.setLayout(v_box)
+        self.dialog1.show()
 
     def clear_table(self, table_combo):
         if QMessageBox.question(self, "Clear table", f"Are you sure to clear the table: {table_combo.currentText()}?") == QMessageBox.StandardButton.Yes:
-            DataManager.deleteOtherData("clear table", table_combo.currentText())
+            DataManager.deleteMainData("clear table", table_combo.currentText())
         self.dialog.close()
 
-    def notes(self):
-        self.dialog = QDialog()
-        label = QLabel("In process")
-        v_box = QVBoxLayout()
-        v_box.addWidget(label)
-        self.dialog.setLayout(v_box)
-        self.dialog.show()
-
     def statistics_editor(self):
-        self.dialog = wstabs.StatisticsEditor()
+        self.dialog1 = wstabs.StatisticsEditor()
 
     def top_12(self):
         top12_tab = wstabs.Top12Tab()
-        self.stacked_widget.addWidget(top12_tab)
-        self.next_window()
+        self.next_window(top12_tab)
 
     def statistics_window(self):
         stats_tab = wstabs.StatisticsTab()
-        self.stacked_widget.addWidget(stats_tab)
-        self.next_window()
+        self.next_window(stats_tab)
 
     def goal_branches_window(self):
         branches_tab = wstabs.BranchesTab()
         branch_list_widget = branches_tab.branch_list_widget
         branch_list_widget.itemClicked.connect(lambda: self.goals_window(branch_list_widget.currentRow()))
-        self.stacked_widget.addWidget(branches_tab)
-        self.next_window()
+        self.next_window(branches_tab)
 
     def goals_window(self, row): 
         self.current_branch_id = row + 1
@@ -405,9 +396,7 @@ class MainWindow(QMainWindow):
         goals_tab.tree_widget.itemClicked.connect(self.goal_window)
         goals_tab.add_button.clicked.connect(self.goal_window)
         goals_tab.sectionMoved.connect(self.changesMade)
-
-        self.stacked_widget.addWidget(goals_tab)
-        self.next_window()
+        self.next_window(goals_tab)
 
     def goal_window(self, item=None):
         goal_tab = wstabs.GoalTab(self.current_branch_id, item)
@@ -415,17 +404,14 @@ class MainWindow(QMainWindow):
         goal_tab.changesSaved.connect(self.changesSaved)
         goal_tab.previous_window_req.connect(self.previous_window)
         goal_tab.goal_list_update_req.connect(self.goalListUpdate)
-
-        self.stacked_widget.addWidget(goal_tab)
-        self.next_window()
+        self.next_window(goal_tab)
 
     def plans_window(self):
         self.tool_bar.hide()
-        self.plans_tab = wstabs.Plans()
-        self.plans_tab.week_plan_view.changesMade.connect(self.changesMade)
-        self.plans_tab.changesSaved.connect(self.changesSaved)
-        self.stacked_widget.addWidget(self.plans_tab)
-        self.next_window()
+        plans_tab = wstabs.Plans()
+        plans_tab.week_plan_view.changesMade.connect(self.changesMade)
+        plans_tab.changesSaved.connect(self.changesSaved)
+        self.next_window(plans_tab)
 
     def form(self):
         self.form = wstabs.Form()
@@ -449,7 +435,6 @@ class MainWindow(QMainWindow):
         subheader_label.setFont(QFont('Calibri', 24))
 
         name_label = QLabel('Name:')
-        password_label = QLabel('Password:')
         self.profile_image_label = ws.AddImageLabel()
 
         self.name_edit = QLineEdit()
@@ -482,6 +467,12 @@ class MainWindow(QMainWindow):
         container.setLayout(v_box)
         self.stacked_widget.addWidget(container)
         self.stacked_widget.setCurrentIndex(0)
+
+    def closeEvent(self, event):
+        if self.dialog:
+            self.dialog.close()
+        if self.dialog1:
+            self.dialog1.close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
