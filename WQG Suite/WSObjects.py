@@ -86,7 +86,6 @@ class Goal(QObject):
         if used_skills:
             used_skills = used_skills.split(",")
             for obj in used_skills:
-                print(obj)
                 obj = obj.split(":")#[skill_name, value]
                 self.add_skill_or_charact(setting_mode=obj + [skills_list_widget, isGroup, "Skills"])
 

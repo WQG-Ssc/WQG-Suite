@@ -1,7 +1,7 @@
 # -*- coding: cp1251 -*-
-import os, sys, configparser, subprocess, DataManager
+import os, configparser, subprocess, DataManager, sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QFileDialog, QComboBox
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction
 from style_sheet import style_sheet
 import WSwidgets as ws
@@ -56,22 +56,21 @@ class MainWindow(QMainWindow):
         self.isGoalListNeedsToBeUpdated = False
         self.dialog = None
         self.dialog1 = None
+        self.showAnimation()
+
+    def showAnimation(self):
+        self.dialog = ws.AnimationDialog()
+        self.anim_timer = QTimer()
+        self.anim_timer.setInterval(1100)
+        self.anim_timer.setSingleShot(True)
+        self.anim_timer.timeout.connect(self.end_animation)
+        self.anim_timer.start()
+        self.dialog.show()
+
+    def end_animation(self):
+        self.dialog.close()
         self.setUpMainWindow()
         self.showMaximized()
-
-    #def showAnimation(self):
-    #    self.dialog = ws.AnimationDialog()
-    #    self.anim_timer = QTimer()
-    #    self.anim_timer.setInterval(1100)
-    #    self.anim_timer.setSingleShot(True)
-    #    self.anim_timer.timeout.connect(self.end_animation)
-    #    self.anim_timer.start()
-    #    self.dialog.show()
-
-    #def end_animation(self):
-    #    self.dialog.close()
-    #    self.setUpMainWindow()
-    #    self.showMaximized()
 
     def setUpMainWindow(self):
         self.stacked_widget = QStackedWidget()
@@ -91,7 +90,6 @@ class MainWindow(QMainWindow):
 
     def check_password(self):
         if self.password_edit.text():
-
             if self.password_edit.text() == self.user_password:
                 self.main_menu()
             else: QMessageBox.warning(self, 'Invalid password', 'Invalid password')
@@ -181,16 +179,15 @@ class MainWindow(QMainWindow):
         container.setLayout(main_h_box)
 
         self.create_toolbar()
+        self.stacked_widget.addWidget(container)
         if len(sys.argv) > 1 and sys.argv[1] == "finish day":
             self.form()
-        self.stacked_widget.addWidget(container)
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
         self.next_window(profile_tab)
 
     def previous_window(self):
-        print(self.stacked_widget.currentIndex())
         if self.stacked_widget.currentIndex() > 0:
             current_widget = self.stacked_widget.currentWidget()
             if self.anyChangesMade:

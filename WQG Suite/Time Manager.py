@@ -1,5 +1,5 @@
 # -*- coding: cp1251 -*-
-import sys, configparser, os
+import configparser, os, sys
 from win10toast import ToastNotifier
 import sqlite3 as sql
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QWidget, QSizePolicy, QMessageBox, QDialog, QStackedWidget, QLineEdit, QCheckBox, QFileDialog, QGraphicsLineItem
@@ -13,7 +13,6 @@ data_base = r"Files\data\main_test.db"
 config_path = r"Files\config\time_manager\config_test.ini"
 version = "0.1.1 public"
 app_icon_path = os.path.abspath(r"Files\icons\Time Manager icon.ico")
-
 
 style_sheet2 = """
 QPushButton#Round{
@@ -126,7 +125,6 @@ class MainWindow(QMainWindow):
             self.completed_tasks = [item.split(",") for item in tasks.split("|")]
         else:
             self.completed_tasks = []
-        print(f"ct:{self.completed_tasks}")
         self.timer_data = config.get("Timers", "Timer_1").split(",")
         self.main_timer_remaining_time = config.getint("Data", "Remaining_time")
         self.isRecurring = bool(self.timer_data[2])
@@ -155,17 +153,14 @@ class MainWindow(QMainWindow):
         #Timer for autosaving
         current_time = QTime().currentTime()
         current_time_str = current_time.toString()
-        print(current_time_str[-4:])
         self.autosave_timer = QTimer()
         self.autosave_timer.setTimerType(Qt.TimerType.PreciseTimer)
 
         if current_time_str[-4:] != "0:00":
             h, m, s = current_time_str.split(":")
-            print(1)
             self.first_turn = 600000 - (int(m[1]) * 60 + int(s)) * 1000 - 1010
             self.autosave_timer.setInterval(self.first_turn)
             self.autosave_timer.setSingleShot(True)
-            print(f"first_turn:{self.first_turn}")
         else:
             self.first_turn = 0
             self.autosave_timer.setInterval(598990)
@@ -173,7 +168,6 @@ class MainWindow(QMainWindow):
         self.autosave_timer.start()
 
     def autosave(self):
-        print("autosaving")
         if self.first_turn:
             self.first_turn = 0
             self.autosave_timer.stop()
@@ -355,9 +349,7 @@ class MainWindow(QMainWindow):
                     self.current_block = block
                     self.title_edit.setText(self.current_block.name)
                     self.expand_line_edit()
-                    print(351)
                 else:
-                    print(311)
                     for task in self.completed_tasks:
                         if task[0] == block.start_time and task[1] == block.end_time and task[2] == block.task_id:
                             block.setCompleted()
@@ -416,7 +408,6 @@ class MainWindow(QMainWindow):
         for item in self.day_plan_view.blocks_dict[0]:
             if item.task_id:
                 busy = ws.getBusyValue(item.task_id)
-                print(f"busy:{busy}")
                 DataManager.saveMainData("Plans", [item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
 
     def finish_day(self):
@@ -772,7 +763,7 @@ class MainWindow(QMainWindow):
             conn.commit()
             conn.close()
         except sql.Error as error:
-            print(f"151: {error}")
+            QMessageBox.warning(self, "Error", f"Error: {error}")
 
     def to_str(self, msecs):
         secs = msecs // 1000

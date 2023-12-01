@@ -7,12 +7,11 @@ other_db = r"Files\data\other.db"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-        #try: 
-        #    return func(*args, **kwargs)
-        #except Exception as error:
-        #    print(f'An error occurred in {func.__name__}: {error}')
-        #    return False
+        try: 
+            return func(*args, **kwargs)
+        except Exception as error:
+            print(f'An error occurred in {func.__name__}: {error}')
+            return False
     return wrapper
 
 @exception_handler
@@ -116,7 +115,6 @@ def saveMainData(data_type, args):
         cur.execute(f"ALTER TABLE Skills_statistics ADD COLUMN '{args}' REAL")
 
     if data_type == "skills_stats":
-        print(f"args:{args}")
         values = f"'{args[1]}','{args[3]}',{args[2]}"
         cur.execute(f"INSERT INTO Skills_statistics (date, task_ID, {args[0]}) VALUES ({values})")
 
@@ -189,7 +187,6 @@ def updateMainData(data_type, args):
         cur.execute("UPDATE Skills_statistics SET task_ID = ? WHERE task_ID == ?", args)
 
     if data_type == "time_block":
-        print(f"args:{args}")
         cur.execute("UPDATE Plans SET end_time = ? WHERE start_time == ? and end_time == ? and task_ID == ? and date == ?", (args[0], args[1].start_time, args[1].end_time, args[1].task_id, args[2]))
         
     conn.commit()
@@ -229,7 +226,6 @@ def deleteMainData(data_type, *args):
         cur.execute("DELETE FROM Plans WHERE date == ?", args)
 
     if data_type == "clear table":
-        print(f"args:{args}")
         cur.execute(f"DELETE FROM {args[0]}")
 
     if data_type == "time block":
@@ -318,10 +314,8 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
     cur = conn.cursor()
     supergoal_id = ".".join(layer[:-1])
 
-    print(f"supergoal_id:{supergoal_id}")
     cur.execute("SELECT progress, custom_characteristics, cc_stats FROM Goals WHERE ID == ?", (supergoal_id,))
     progress, characts, supergoal_cc_stats = cur.fetchone()
-    print(f"characts:{characts}")
     charactsToRecalc = []
     allCharacts = {}
     if characts:
@@ -338,11 +332,8 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
     raw_ids = cur.fetchall()
 
     ids = [item[0] for item in raw_ids]
-    print(f"ids:{ids}")
     regex = re.compile(f"^{supergoal_id}\.[^.]+$")
     layer_list = [item for item in ids if regex.match(item)]
-
-    print(f"charactsToRecalc{charactsToRecalc}")
 
     skills_dict = {}
     cc_stats_dict = {charact:{} for charact in charactsToRecalc}
@@ -354,14 +345,12 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
     if layer_list:
         for goal in layer_list:
             goal_id = goal
-            print(f"selected id:{goal_id}")
             if charactsToRecalc:
                 cur.execute("SELECT used_skills, time, custom_characteristics, cc_stats FROM Goals WHERE ID == ?", (goal_id,))
             else:
                 cur.execute("SELECT used_skills, time FROM Goals WHERE ID == ?", (goal_id,))
 
             goal_data = cur.fetchone()
-            print(f"goal_data:{goal_data}")
             if goal_data[0]:
                 for skill in goal_data[0].split(","):
                     skill_name, value = skill.split(":")
@@ -379,7 +368,6 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
 
                     if goal_data[3]:
                         for stat in goal_data[3].split("|"):
-                            print(stat)
                             charact_name, stats = stat.split(":")
                             if charact_name in charactsToRecalc:
                                 for record in stats.split(","):
@@ -393,9 +381,6 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
             for skill in skills_dict.keys():
                 skills += f"{skill}:{skills_dict[skill]},"
             skills = skills.rstrip(",")
-
-            print(f"skills:{skills}")
-            print(f"time:{time}")
 
             if charactsToRecalc:
                 for charact in cc_stats_dict.keys():
@@ -419,8 +404,6 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
 
     if charactsToRecalc:
         cur.execute("UPDATE Goals SET used_skills = ?, time = ?, custom_characteristics = ?, cc_stats = ? WHERE ID == ?", (skills, time, ccs, cc_stats, supergoal_id))
-        print(f"ccs:{ccs}")
-        print(f"cc_stats:{cc_stats}")
     else:
         cur.execute("UPDATE Goals SET used_skills = ?, time = ? WHERE ID == ?", (skills, time, supergoal_id))
     conn.commit()
@@ -449,18 +432,12 @@ def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=F
             end_time = ws.calculate_msecs(record[1])
             record_time = end_time - start_time
             goal_time += record_time
-        print(f"records:{records}")
-        print(goal_id, p_charact, cc_stats)
         goal_time /= 3600000
         progress_str = f"{goal_time}:Hours"
-        print(f"goal_time:{goal_time}")
     else:
         cc_stats = loadMainData("goal_custom", goal_id, one=True)[0]
         charact_stats = [item.split(":")[1] for item in cc_stats.split("|") if item.split(":")[0] == p_charact][0]
-        print(f"characts_stats:{charact_stats}")
         progress_str = str(sum([float(item.split(" ")[1]) for item in charact_stats.split(",")])) + ":" + p_charact
-        print(progress_str)
-        print(goal_id)
     if returning:
         return progress_str
     updateMainData("progress", [progress_str, goal_id])
@@ -548,8 +525,6 @@ def synchronizePlans():
         data_str = data_str.rstrip("|")
         
         user.send(data_str.encode("utf-8"))
-        print(f"data: {data_str}")
-        print(user.recv(100000).decode("utf-8"))
         server.close()
     conn.close()
 
@@ -562,7 +537,6 @@ def continue_on_phone(tasks):
         task_str = ""
         for task in tasks:
             task_str += ",".join(task) + "|"
-        print(f"data: {task_str}")
         task_str = task_str.rstrip("|")
         user.send(task_str.encode("utf-8"))
         server.close()
@@ -575,7 +549,6 @@ def listen():
     server.listen(1)
     user, adress = server.accept()
     data = user.recv(12582912).decode("utf-8")
-    print(data)
     c_task_str, main_stats_str, plans_str = data.split("$")
     completed_tasks = []
     if c_task_str:

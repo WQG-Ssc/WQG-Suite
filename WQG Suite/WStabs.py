@@ -4,12 +4,12 @@ import datetime as dt
 from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
 from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal, QDate
 from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor, QFontMetrics
-from WQG_Suite import user_config_path
 import plotly.graph_objs as go
 import WSwidgets as ws
 import WSobjects as wsobj
 import DataManager, configparser
 i_dir = r"Files\icons"
+user_config_path = r"Files\config\user.ini"
 
 class ProfileTab(QWidget):
     def __init__(self, user_image, user_info):
@@ -1237,10 +1237,8 @@ class Form(QDialog):
         if self.FormFillingDate != self.current_date:
             self.setModal(True)
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
-            print(f"date:{self.current_date}")
 
             today_records = DataManager.loadMainData("day_stats", self.current_date)
-            print(f"today:{today_records}")
             self.records_dict = {}
             if today_records:
                 for record in today_records:
@@ -1251,7 +1249,6 @@ class Form(QDialog):
                         self.records_dict[record[2]] += record_time
                     else:
                         self.records_dict[record[2]] = record_time
-            print(f"records_dict:{self.records_dict}")
 
             today_label = QLabel("Today")
             today_label.setFont(QFont("Calibri", 24, 700))
@@ -1288,9 +1285,6 @@ class Form(QDialog):
             for task in self.records_dict:
                 if len(task.split(".")) > 1:
                     self.add_goal_item(task)
-
-            print(f"line_edit_dict{self.line_edit_dict}")
-            print(f"goal_ccs_dict:{self.goal_ccs_dict}")
 
             self.day_plan_view = ws.WeekPlanView(QDate().currentDate(), False)
             self.day_plan_view.changesMade.connect(self.check_plan)
@@ -1330,14 +1324,12 @@ class Form(QDialog):
     def add_goal_item(self, task):
         if task not in self.goals_with_dccs:
             dynamic_ccs = []
-            print(f"task:{task}")
             goal = list(DataManager.loadMainData("goal", task, one=True))
             goal_name = goal[1]
             ccs = goal[11]
             if ccs:
                 ccs = ccs.split(",")
                 dynamic_ccs = [item.split(":")[0] for item in ccs if DataManager.loadMainData("characteristic", item.split(":")[0], one=True)[0] == "dynamic"]
-            print(f"dynamic_ccs:{dynamic_ccs}")
             if dynamic_ccs:
                 widget = QWidget()
                 h_box = QHBoxLayout()
@@ -1393,7 +1385,6 @@ class Form(QDialog):
                     if p_charact == "Hours":
                         value += self.records_dict[goal_id] / 3600000
 
-                    print(f"value:{value}")
                     if goal_id in self.line_edit_dict:
                         for edit in self.line_edit_dict[goal_id]:
                             if edit.text():
@@ -1421,7 +1412,6 @@ class Form(QDialog):
                             DataManager.recalculateValues(layers)
                             supergoal_id = ".".join(layers[:-1])
                             layers.pop(-1)
-                    print(f"cc_stats_str:{cc_stats_str}")
 
             for task_id in self.records_dict:
                 DataManager.addSkillStat(task_id, self.records_dict[task_id] / 3600000, self.current_date)
@@ -1552,7 +1542,6 @@ class StatisticsEditor(QDialog):
 
     def load_day(self, date):
         day = DataManager.loadMainData("day_data", date.toString("yyyy-MM-dd"), one=True)
-        print(day)
         self.day_update = False
         if day:
             for i in range(len(self.second_tab_cells)):
@@ -1580,7 +1569,6 @@ class StatisticsEditor(QDialog):
         if stats:
             stats_dict = {charact.split(":")[0]:charact.split(":")[1] for charact in stats.split("|")}
             for charact in stats_dict:
-                print(stats_dict)
                 widget = QWidget()
                 charact_label = QLabel(charact + ":")
                 line_edit = QLineEdit(stats_dict[charact])
@@ -1627,10 +1615,8 @@ class StatisticsEditor(QDialog):
             if index == 2 and self.stats:
                 task_id_list = []
                 mode = self.mode_combo.currentIndex()
-                print(f"stats:{self.stats}")
                 if mode == 0:
                     for day_stat in self.stats:
-                        print(f"day_stats:{day_stat}")
                         if len(day_stat) == 4:
                             if any(day_stat):
                                 task_id_list.append(day_stat[2])
@@ -1653,7 +1639,6 @@ class StatisticsEditor(QDialog):
                                 task_id_list.append(day_stat[1])
                                 end_time = ws.to_str(int(ws.calculate_msecs(start_time) + (float(day_stat[0]) * 3600000)))
                                 time_dict[date] = end_time
-                                print([start_time, end_time, day_stat[1], date])
                                 DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
                                 success = DataManager.saveMainData("statistics", [start_time, end_time, day_stat[1], date, 1])
                         else:
@@ -1663,19 +1648,14 @@ class StatisticsEditor(QDialog):
                 #Recalculate progress of goals
                 for task_id in task_id_list:
                     if len(task_id.split(".")) > 1: #determinating if task_id is goal_id or not
-                        print("=====")
-                        print(f"task_id:{task_id}")
                         goal_data = DataManager.loadMainData("goal", task_id, one=True)
-                        print(f"goal_data:{goal_data}")
                         DataManager.recalculateProgress(task_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
                         DataManager.updateMainData("goal_state", ["completing", task_id])
 
                         if len(task_id.split(".")) > 2:
-                            print(2)
                             layers = task_id.split(".")
                             while len(layers) > 2:
                                 goal_id = ".".join(layers[:-1])
-                                print(f"supergoal recalc:{goal_id}")
                                 goal_data = DataManager.loadMainData("goal", goal_id, one=True)
                                 DataManager.updateMainData("goal_state", ["completing", task_id])
                                 DataManager.recalculateProgress(goal_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
@@ -1776,7 +1756,6 @@ class Plans(QWidget):
 
     def recalculate_time(self):
         blocks_dict = self.week_plan_view.blocks_dict
-        print(f"bd:{blocks_dict}")
         for i in range(7):
             time = 0
             for item in blocks_dict[i]:
@@ -1825,7 +1804,6 @@ class Plans(QWidget):
     def save_plan(self, *args, exceptItems=[]):
         blocks_dict = self.week_plan_view.blocks_dict
         for i in blocks_dict:
-            print(f"bd:{blocks_dict}")
             day = self.current_date + dt.timedelta(days=i)
             DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
             for block in blocks_dict[i]:

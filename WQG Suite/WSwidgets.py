@@ -53,7 +53,6 @@ class AddImageLabel(QLabel):
                     self.image = self.image.copy(size.width() // 2 - height / 2, size.height() // 2 - height / 2, self.size.width(), height)
                 self.shape_image()
             self.setPixmap(self.image)
-            print(1)
             if self.ring: self.addRing()
 
     def shape_image(self):
@@ -77,7 +76,6 @@ class AddImageLabel(QLabel):
         if self.ring: self.addRing()
 
     def addRing(self):
-        print(2)
         self.setFixedSize(82, 82)
         image = QImage(82, 82, QImage.Format.Format_ARGB32)
         image.fill(Qt.GlobalColor.black)
@@ -820,7 +818,6 @@ class GraphItem(QWidget):
 
             if self.graph_type == "Skills": 
                 self.value_type = "Numeric"
-                print(self.value_type)
             
             h_box.addWidget(remove_graph)
         h_box.setContentsMargins(10, 0, 0, 0)
@@ -1007,7 +1004,6 @@ class ObjectManager(QWidget):
         if text and text != " ":
             if not self.resized:
                 geo = self.line_edit.geometry()
-                print(f"geo:{geo}")
                 self.setGeometry(geo.x(), geo.y() + geo.height(), geo.width(), self.h)
                 self.resized = True
             self.list_widget.clear()
@@ -1196,7 +1192,6 @@ class CompleteGoalWindow(QWidget):
             DataManager.updateMainData("goal", goal_data)
         else:
             self.goal_data = goal_data
-        print(goal_data)
 
     def complete_goal(self):
         if self.goal_data[13]:
@@ -1205,7 +1200,6 @@ class CompleteGoalWindow(QWidget):
                 if goal[0] != self.goal_data[0]:
                     self.recalc_goal_values_for_comp(goal[0])
 
-        print(self.goal_data)
         DataManager.updateMainData("goal", self.goal_data)
         self.completed.emit()
         self.close()
@@ -1610,7 +1604,6 @@ class WeekPlanView(QGraphicsView):
             if isinstance(item, TimeBlock):
                 y = pos.y() - calculate_msecs(item.start_time) * 0.00001
                 x = pos.x()
-                print(item.start_button_rect.contains(x, y), item.start_button_rect)
                 if item.start_button_rect.contains(x, y):
                     self.startTask.emit(item)
         return super().mousePressEvent(event)
@@ -1679,7 +1672,6 @@ class WeekPlanView(QGraphicsView):
 
     def changeWeek(self, new_start_day, exceptItems):
         self.start_day = new_start_day
-        print(f"\n\nexcept:{exceptItems}")
         for item in self.scene.items():
             if item not in exceptItems and isinstance(item, TimeBlock):
                 self.scene.removeItem(item)
@@ -1881,7 +1873,6 @@ class TimeBlockDialog(QDialog):
         self.skill_edit.setVisible(state)
 
     def set_time_block(self):
-        print(self.object_manager.isSelected)
         if self.line_edit.text():
             button = self.button_group.checkedButton()
             if button.text() == "Goal/skill" and self.object_manager.isSelected:
@@ -1978,7 +1969,6 @@ def getBusyValue(task_id):
     task = task_id.split(":")
     if len(task) > 1:
         if task[0] == "t":
-            print(f"task:{task[1]}")
             busy = DataManager.loadMainData("task", task[1], one=True)[1]
         elif task[0] == "n":
             busy = 0
