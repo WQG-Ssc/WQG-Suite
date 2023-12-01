@@ -411,7 +411,7 @@ class MainWindow(QMainWindow):
                 DataManager.saveMainData("Plans", [item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
 
     def finish_day(self):
-        subprocess.Popen("WQG's Suite.exe", "finish day")
+        subprocess.Popen(["WQG's Suite.exe", "finish day"])
 
     def start_task(self, time_block):
         self.save_plan()
