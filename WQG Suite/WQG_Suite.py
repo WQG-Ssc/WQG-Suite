@@ -10,7 +10,7 @@ import sqlite3 as sql
 
 i_dir = r"Files\icons"
 user_config_path = r"Files\config\user.ini"
-main_db = r"Files\data\main_test.db"
+main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
 
 class MainWindow(QMainWindow):
@@ -298,14 +298,20 @@ class MainWindow(QMainWindow):
         edit_phrases_button.clicked.connect(self.edit_phrases)
         edit_profile_button = QPushButton("Edit profile")
         edit_profile_button.clicked.connect(self.edit_profile)
+        about_button = QPushButton("About")
+        about_button.clicked.connect(self.show_about)
         v_box = QVBoxLayout()
         v_box.setSpacing(10)
         v_box.addWidget(stat_edit_button)
         v_box.addWidget(clear_db_button)
         v_box.addWidget(edit_phrases_button)
         v_box.addWidget(edit_profile_button)
+        v_box.addWidget(about_button)
         self.dialog.setLayout(v_box)
         self.dialog.show()
+
+    def show_about(self):
+        QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.0.1</font></p>""")
 
     def edit_profile(self):
         self.dialog1 = QDialog()
@@ -341,12 +347,12 @@ class MainWindow(QMainWindow):
             parser.set("User", "Diary_path", self.diary_path)
             with open(user_config_path, "w") as config_file:
                 parser.write(config_file)
-            self.dialog.close()
+            self.dialog1.close()
         else:
             QMessageBox.warning(self, "Name field is empty", "Enter name to save profile")
 
     def get_diary_path(self):
-        self.diary_path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *.rtf *docx)")
+        self.diary_path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *docx)")
 
     def edit_phrases(self):
         self.dialog1 = wstabs.PhrasesEditor()
@@ -368,7 +374,6 @@ class MainWindow(QMainWindow):
     def clear_table(self, table_combo):
         if QMessageBox.question(self, "Clear table", f"Are you sure to clear the table: {table_combo.currentText()}?") == QMessageBox.StandardButton.Yes:
             DataManager.deleteMainData("clear table", table_combo.currentText())
-        self.dialog.close()
 
     def statistics_editor(self):
         self.dialog1 = wstabs.StatisticsEditor()

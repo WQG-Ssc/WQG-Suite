@@ -154,7 +154,7 @@ class ProfileInfoBox(QWidget):
 
     def open_diary(self):
         if not self.diary_path:
-            path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *.rtf *docx)")
+            path, _ = QFileDialog.getOpenFileName(self.parent(), "Select diary file", "", "Text Files(*.txt *docx)")
             if path:
                 parser = configparser.ConfigParser()
                 parser.read(user_config_file)
@@ -163,7 +163,10 @@ class ProfileInfoBox(QWidget):
                 with open(user_config_file, "w") as config_file:
                     parser.write(config_file)
         if self.diary_path:
-            os.startfile(self.diary_path)
+            try:
+                os.startfile(self.diary_path)
+            except FileNotFoundError:
+                QMessageBox.warning(self, "File not found", "File not found")
 
     def paintEvent(self, event):
         pen = QPen(QColor("#FFD300"), 2)
@@ -1297,26 +1300,25 @@ class TimeBlock(QGraphicsItem):
 
         font10 = QFont("Calibri", 10)
         metrics16 = QFontMetrics(font16)
+        metrics8 = QFontMetrics(QFont("Calibri", 8))
 
         if self.block_rect[2] >= 54:
             painter.setFont(font16)
-            if metrics16.horizontalAdvance(self.name) > 222:
-                self.name = self.name[:11]
-            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, self.name)
+            name = metrics16.elidedText(self.name, Qt.TextElideMode.ElideRight, 176)
+            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, name)
             painter.setFont(font10)
-            header_text_width = metrics16.horizontalAdvance(self.name)
+            header_text_width = metrics16.horizontalAdvance(name)
             painter.drawText(self.block_rect[0] + 12 + header_text_width, self.block_rect[1] + 18, period)
             painter.setFont(font16)
             painter.drawText(self.block_rect[0] + self.width - metrics16.horizontalAdvance(time) - 5, self.block_rect[1] + self.block_rect[2] - 3, time)
         elif self.block_rect[2] >= 18:
-            if metrics16.horizontalAdvance(self.name) > 222:
-                self.name = self.name[:11]
+            name = metrics16.elidedText(self.name, Qt.TextElideMode.ElideRight, 156)
             painter.setFont(font16)
             if self.block_rect[2] <= 27:
-                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 15, self.name)
+                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 15, name)
             else:
-                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, self.name)
-            header_text_width = metrics16.horizontalAdvance(self.name)
+                painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 20, name)
+            header_text_width = metrics16.horizontalAdvance(name)
             if not header_text_width > 160:
                 painter.setFont(font10)
                 if self.block_rect[2] >= 27:
@@ -1327,30 +1329,29 @@ class TimeBlock(QGraphicsItem):
             painter.drawText(self.block_rect[0] + self.width - metrics16.horizontalAdvance(time) - 5, self.block_rect[1] + self.block_rect[2] - 3, time)
         elif self.block_rect[2] >= 9:
             painter.setFont(QFont("Calibri", 8))
-            metrics8 = QFontMetrics(QFont("Calibri", 8))
-            header_text_width = metrics8.horizontalAdvance(self.name)
-            if header_text_width > 222:
-                self.name = self.name[:22]
-            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 8, self.name)
-            if not header_text_width > 157:
-                painter.drawText(self.block_rect[0] + 10 + header_text_width, self.block_rect[1] + 8, period)
+            name = metrics8.elidedText(self.name, Qt.TextElideMode.ElideRight, 130)
+            header_text_width = metrics8.horizontalAdvance(name)
+            painter.drawText(self.block_rect[0] + 6, self.block_rect[1] + 8, name)
+            painter.drawText(self.block_rect[0] + 10 + header_text_width, self.block_rect[1] + 8, period)
             painter.drawText(self.block_rect[0] + self.width - metrics8.horizontalAdvance(time) - 5, self.block_rect[1] + 8, time)
         else:
-            self.setToolTip(f"{self.name} {period} {time}")
+            name = self.name
+            self.setToolTip(f"{name} period: {period} time: {time}h")
 
         if self.inPlan:
             metrics = QFontMetrics(font10)
+
             if self.block_rect[2] >= 54:
                 self.start_button_rect = QRect(10, self.block_rect[1] + 25, 23, 23)
                 painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task.png"))
             elif self.block_rect[2] >= 27:
-                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(self.name) + 16, self.block_rect[1] + 10, 15, 8)
+                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(name) + 16, self.block_rect[1] + 10, 15, 8)
                 painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
             elif self.block_rect[2] >= 18:
-                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(self.name) + 16, self.block_rect[1] + 5, 15, 8)
+                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics16.horizontalAdvance(name) + 16, self.block_rect[1] + 5, 15, 8)
                 painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
             elif self.block_rect[2] >= 9:
-                self.start_button_rect = QRect(metrics8.horizontalAdvance(period) + metrics8.horizontalAdvance(self.name) + 16, self.block_rect[1], 15, 8)
+                self.start_button_rect = QRect(metrics.horizontalAdvance(period) + metrics8.horizontalAdvance(name) + 16, self.block_rect[1], 15, 8)
                 painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task small.png"))
             self.start_button_rect.setY(self.start_button_rect.y() - self.block_rect[1])
 

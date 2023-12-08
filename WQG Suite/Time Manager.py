@@ -9,8 +9,8 @@ import WSwidgets as ws
 import DataManager, subprocess
 from style_sheet import style_sheet
 
-data_base = r"Files\data\main_test.db"
-config_path = r"Files\config\time_manager\config_test.ini"
+data_base = r"Files\data\main.db"
+config_path = r"Files\config\time_manager\config.ini"
 version = "0.1.1 public"
 app_icon_path = os.path.abspath(r"Files\icons\Time Manager icon.ico")
 
@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self.toaster = ToastNotifier()
         self.timer = QTimer()
         self.task_timer = QTimer()
+        self.task_timer.setSingleShot(True)
         self.task_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.task_timer.timeout.connect(self.task_time_expired)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)

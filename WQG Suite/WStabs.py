@@ -1,13 +1,12 @@
-import csv
 import statistics as stats
 import datetime as dt
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QCalendarWidget, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTime, QRect, QSize, QRegularExpression, pyqtSignal, QDate
-from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QPainter, QPen, QBrush, QColor, QFontMetrics
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
+from PyQt6.QtCore import Qt, QSize, QRegularExpression, pyqtSignal, QDate
+from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QFontMetrics
 import plotly.graph_objs as go
 import WSwidgets as ws
 import WSobjects as wsobj
-import DataManager, configparser
+import DataManager, configparser, os, docx, csv
 i_dir = r"Files\icons"
 user_config_path = r"Files\config\user.ini"
 
@@ -1273,8 +1272,8 @@ class Form(QDialog):
 
             change_label = QLabel("Change of dynamic characts")
             self.change_list_widget = QListWidget()
-            day_note = QPlainTextEdit()
-            day_note.setPlaceholderText("How was your day?")
+            self.day_note = QPlainTextEdit()
+            self.day_note.setPlaceholderText("How was your day?")
 
             ok_button = QPushButton("OK")
             ok_button.clicked.connect(self.save_day_data)
@@ -1305,7 +1304,7 @@ class Form(QDialog):
             v_box.addWidget(today_label)
             v_box.addLayout(grid)
             v_box.addWidget(self.change_list_widget)
-            v_box.addWidget(day_note)
+            v_box.addWidget(self.day_note)
             v_box.addWidget(ok_button)
 
             plan_v_box = QVBoxLayout()
@@ -1419,7 +1418,38 @@ class Form(QDialog):
             DataManager.recalculateSkills()
             parser = configparser.ConfigParser()
             parser.read(user_config_path)
+            diary_path = parser.get("User", "diary_path")
             parser.set("Data", "FormFillingDate", self.current_date)
+
+            if self.day_note.toPlainText():
+                ok = True
+                doc = None
+                while not doc and ok:
+                    if not diary_path:
+                        diary_path, _ = QFileDialog.getOpenFileName(self, "Select diary to save notes", filter="Text Files(*.txt *.docx)")
+                        if diary_path:
+                            parser.set("User", "diary_path", diary_path)
+                    if diary_path:
+                        file_format = os.path.splitext(diary_path)[1]
+                        if file_format == ".txt":
+                            with open(diary_path, "a") as diary:
+                                diary.write(self.current_date + "\n" + self.day_note.toPlainText() + "\n")
+                            ok = False
+                        elif file_format == ".docx":
+                            try:
+                                doc = docx.Document(diary_path)
+                            except Exception:
+                                if not QMessageBox.question(self, "Error", "File not exists. If you're sure that it exists try to add some text in it. Do you want to try again?") == QMessageBox.StandardButton.Yes:
+                                    ok = False
+                                else:
+                                    diary_path = None
+                            if doc:
+                                text_lines = [self.current_date]
+                                text_lines += self.day_note.toPlainText().split("\n")
+                                for line in text_lines:
+                                    doc.add_paragraph(line)
+                                doc.save(diary_path)
+
             with open(user_config_path, "w") as config_file:
                 parser.write(config_file)
             self.close()
@@ -1451,7 +1481,7 @@ class StatisticsEditor(QDialog):
 
         self.edit_mode = QComboBox()
         self.edit_mode.addItems(["Goal custom characteristic statistics", "Day info", "load main statistics"])#"Day schedule"
-        self.edit_mode.activated.connect(self.stacked_widget.setCurrentIndex)
+        self.edit_mode.activated.connect(self.switch_tab)
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.save_data)
 
@@ -1500,6 +1530,9 @@ class StatisticsEditor(QDialog):
         regex = QRegularExpression("[0-9][0-9]*\.?[0-9]+$")
         work_time_edit.setValidator(QRegularExpressionValidator(regex))
 
+        from_csv = QPushButton("from .csv in form: ms, ps, dr, wt, date")
+        from_csv.clicked.connect(self.load_stats)
+
         grid2 = QGridLayout()
         grid2.addWidget(self.date_edit, 0, 0)
         grid2.addWidget(m_state_label, 1, 0)
@@ -1510,6 +1543,7 @@ class StatisticsEditor(QDialog):
         grid2.addWidget(day_rate_line_edit, 3, 1)
         grid2.addWidget(work_time_label, 4, 0)
         grid2.addWidget(work_time_edit, 4, 1)
+        grid2.addWidget(from_csv, 5, 0, 1, 0)
         self.second_tab_cells = [m_state_line_edit, p_state_line_edit, day_rate_line_edit, work_time_edit]
 
         self.load_day(self.current_date)
@@ -1540,13 +1574,15 @@ class StatisticsEditor(QDialog):
         self.setLayout(main_v_box)
         self.show()
 
+    def switch_tab(self, i):
+        self.stacked_widget.setCurrentIndex(i)
+        self.stats = []
+
     def load_day(self, date):
         day = DataManager.loadMainData("day_data", date.toString("yyyy-MM-dd"), one=True)
-        self.day_update = False
         if day:
             for i in range(len(self.second_tab_cells)):
                 self.second_tab_cells[i].setText(str(day[i]))
-            self.day_update = True
         else:
             for cell in self.second_tab_cells:
                 cell.setText("")
@@ -1600,17 +1636,22 @@ class StatisticsEditor(QDialog):
                     layers.pop(-1)
 
             if index == 1:
-                isDataEntered = True
-                for edit in self.second_tab_cells:
-                    if not edit.text():
-                        isDataEntered = False
-                if isDataEntered:
-                    if self.day_update:
-                        success = DataManager.updateMainData("day_data", [item.text() for item in self.second_tab_cells] + [self.date_edit.date().toString("yyyy-MM-dd")])
-                    else:
-                        success = DataManager.saveMainData("day_data", [item.text() for item in self.second_tab_cells] + [self.date_edit.date().toString("yyyy-MM-dd")])
+                if self.stats:
+                    for day_stats in self.stats:
+                        if len(day_stats) == 5:
+                            if any(day_stats):
+                                success = DataManager.saveMainData("day_data", day_stats)
+                        else:
+                            success = False
                 else:
-                    QMessageBox.warning(self, "Not all the cells are filled", "Fill all the cells to save data")
+                    isDataEntered = True
+                    for edit in self.second_tab_cells:
+                        if not edit.text():
+                            isDataEntered = False
+                    if isDataEntered:
+                        success = DataManager.saveMainData("day_data", [item.text() for item in self.second_tab_cells] + [self.date_edit.date().toString("yyyy-MM-dd")])
+                    else:
+                        QMessageBox.warning(self, "Not all the cells are filled", "Fill all the cells to save data")
 
             if index == 2 and self.stats:
                 task_id_list = []

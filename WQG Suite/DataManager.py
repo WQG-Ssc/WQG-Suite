@@ -2,7 +2,7 @@ import sqlite3 as sql
 import WSwidgets as ws
 import re, socket
 from PyQt6.QtCore import QDate
-main_db = r"Files\data\main_test.db"
+main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
 
 def exception_handler(func):
@@ -125,7 +125,14 @@ def saveMainData(data_type, args):
         cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time') VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "day_data":
-        cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', 'Work time', date) VALUES (?, ?, ?, ?, ?)", args)
+        print(args)
+        cur.execute("SELECT date FROM Days WHERE date == ?", (args[4],))
+        if cur.fetchone():
+            print(f"1: {args}")
+            cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ?, 'Work time' = ? WHERE date == ?", args)
+        else:
+            print(f"2: {args}")
+            cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', 'Work time', date) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "statistics":
         cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", args)
