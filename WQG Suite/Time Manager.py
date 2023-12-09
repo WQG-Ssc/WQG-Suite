@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self.initializeUI()
 
     def load_data(self):
+        self.day_plan_widget = None
         self.isPaused = True
         self.isTimerEnabled = False
         self.isTimeouted = False
@@ -271,13 +272,13 @@ class MainWindow(QMainWindow):
         info_button.clicked.connect(self.show_info)
         info_button.setObjectName("Icon")
 
-        plan_button = QPushButton()
-        plan_button.setCheckable(True)
-        plan_button.setIcon(QIcon(r"Files\icons\plan.png"))
-        plan_button.setIconSize(QSize(25, 25))
-        plan_button.setToolTip("Plan")
-        plan_button.toggled.connect(self.show_plan)
-        plan_button.setObjectName("Icon")
+        self.plan_button = QPushButton()
+        self.plan_button.setCheckable(True)
+        self.plan_button.setIcon(QIcon(r"Files\icons\plan.png"))
+        self.plan_button.setIconSize(QSize(25, 25))
+        self.plan_button.setToolTip("Plan")
+        self.plan_button.toggled.connect(self.show_plan)
+        self.plan_button.setObjectName("Icon")
 
         sync_button = QPushButton()
         sync_button.clicked.connect(self.synchronize_plan)
@@ -301,7 +302,7 @@ class MainWindow(QMainWindow):
         buttons_h_box.addWidget(sync_button)
         buttons_h_box.addWidget(phone_button)
         buttons_h_box.addWidget(info_button)
-        buttons_h_box.addWidget(plan_button)
+        buttons_h_box.addWidget(self.plan_button)
 
         h_box = QHBoxLayout()
         h_box.addStretch()
@@ -808,6 +809,11 @@ class MainWindow(QMainWindow):
         self.showNormal()
 
     def event(self, event):
+        if self.day_plan_widget and self.plan_button.isChecked():
+            if event.type() == QEvent.Type.Hide:
+                self.day_plan_widget.hide()
+            elif event.type() == QEvent.Type.Show:
+                self.day_plan_widget.show()
         if self.isPaused:
             if event.type() == QEvent.Type.WindowStateChange and self.windowState() and Qt.WindowState.WindowMinimized:
                 self.stay_always_on_top_sys()
