@@ -56,7 +56,9 @@ class MainWindow(QMainWindow):
         self.isGoalListNeedsToBeUpdated = False
         self.dialog = None
         self.dialog1 = None
-        self.showAnimation()
+        #self.showAnimation()
+        self.setUpMainWindow()
+        self.showMaximized()
 
     def showAnimation(self):
         self.dialog = ws.AnimationDialog()

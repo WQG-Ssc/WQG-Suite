@@ -20,7 +20,7 @@ def loadMainData(data_type, *args, one=False):
     cur = conn.cursor()
 
     if data_type == "branches":
-        cur.execute("SELECT name FROM Branches")
+        cur.execute("SELECT name FROM Branches ORDER BY RowID")
 
     if data_type == "goals":
         cur.execute(f"SELECT name, time, benefit, limit_date, priority, state, ID, files, progress, custom_characteristics, showing_in_list FROM Goals WHERE ID LIKE '{args[0]}.%' ORDER BY ID")

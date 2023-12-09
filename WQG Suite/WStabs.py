@@ -27,6 +27,7 @@ class ProfileTab(QWidget):
             tree_widget_item.setFont(0, QFont('Calibri', 24))
             tree_widget_item.setFont(1, QFont('Calibri', 18))
             self.skills_tree_widget.addTopLevelItem(tree_widget_item)
+        self.skills_tree_widget.resizeColumnToContents(0)
 
         add_skill_button = QPushButton()
         add_skill_button.clicked.connect(self.add_skill)
@@ -61,7 +62,6 @@ class ProfileTab(QWidget):
 class BranchesTab(QWidget):
     def __init__(self):
         super().__init__()
-
         branches = DataManager.loadMainData("branches")
         self.branch_list = []
 
@@ -123,6 +123,19 @@ class BranchesTab(QWidget):
             self.branch_list.pop(branch_index)
             self.branch_list_widget.takeItem(branch_index)
 
+class FloatTreeWidgetItem(QTreeWidgetItem):
+    def __init__(self, text):
+        super().__init__(text)
+
+    def __lt__(self, otherItem):
+        column = self.treeWidget().sortColumn()
+        try:
+            num = float(self.text(column))
+            othernum = float(otherItem.text(column))
+            return num < othernum
+        except Exception:
+            return self.text(column).lower() < otherItem.text(column).lower()
+
 class GoalsTab(QWidget):
     sectionMoved = pyqtSignal()
     def __init__(self, branch):
@@ -139,6 +152,7 @@ class GoalsTab(QWidget):
         self.updateWidget()
 
         self.tree_widget.setColumnWidth(0, 135)
+        self.tree_widget.setColumnWidth(1, 200)
         self.tree_widget.setColumnWidth(6, 120)
         self.tree_widget.setColumnWidth(4, 135)
 
@@ -280,7 +294,7 @@ class GoalsTab(QWidget):
                 for charact in self.headers[1:]:
                     goal_info_list.append(goal_info_dict.pop(charact, ""))
 
-                goal_item = QTreeWidgetItem(self.tree_widget, [""] + goal_info_list)
+                goal_item = FloatTreeWidgetItem([""] + goal_info_list)
                 goal_item.setSizeHint(1, QSize(100, 120))
                 goal_item.setFont(1, font18b)
                 for i in range(2, 8 + len(self.ccs)):
@@ -996,14 +1010,13 @@ class GoalTab(QWidget):
         depth = len(parent_id.split(".")) + 1
         
         ids = DataManager.loadMainData("get_goal_ids", parent_id)
+        print(f"ids:{ids}")
         level_len = 0
         for iD in ids:
             idl = iD[0].split(".")
             if len(idl) == depth:
                 level_len += 1
-                if int(idl[-1]) != level_len:
-                    level_len -= 1 #Means there's a gap in the ids. For example, 1.1, 1.3,...
-                    break
+        print(f"{parent_id}.{level_len + 1}")
         return f"{parent_id}.{level_len + 1}"
 
     def saveData(self):

@@ -2,8 +2,8 @@
 import os, math, random, configparser
 import DataManager
 from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QMessageBox, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QButtonGroup, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem, QRadioButton, QTimeEdit
-from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QImage
-from PyQt6.QtCore import QRectF, QRect, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer, pyqtProperty, QEasingCurve, QPropertyAnimation
+from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QImage, QRegularExpressionValidator
+from PyQt6.QtCore import QRectF, QRect, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer, pyqtProperty, QEasingCurve, QPropertyAnimation, QRegularExpression
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
 from plotly.io import to_html
@@ -22,7 +22,7 @@ class AddImageLabel(QLabel):
         self.image_path = ""
         self.setFixedSize(self.size)
         self.image = QPixmap(default_image_path)
-        self.image = self.image.scaled(QSize(self.size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        self.image = self.image.scaled(self.size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         self.ring = ring
         if self.shaping:
             self.shape_image()
@@ -224,7 +224,6 @@ class CompletingGoalsWidget(QWidget):
             item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), goal[0])
         item.setTextAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
         item.setFlags(~Qt.ItemFlag.ItemIsSelectable)
-        item.setFlags(~Qt.ItemFlag.ItemIsEditable)
         return item
 
     def load_data(self):
@@ -376,15 +375,19 @@ def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
     if diameter > 75:
         template = QPixmap(r"Files\Icons\big template.png")
         offset = 11
+        antialiasing = QPixmap(r"Files\Icons\antialiasing big.png")
     elif diameter == 75:
         offset = 11
         template = QPixmap(r"Files\Icons\template.png")
+        antialiasing = QPixmap(r"Files\Icons\antialiasing.png")
     else:
         offset = 7
         template = QPixmap(r"Files\Icons\mini template.png")
 
     painter.begin(template)
     painter.drawPixmap(offset, offset, image)
+    if diameter >= 75:
+        painter.drawPixmap(9, 9, antialiasing)
 
     painter.setPen(QPen(QColor(getGoalColor(d_diff)), 3, Qt.PenStyle.SolidLine))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -652,8 +655,11 @@ class GoalTreeItem(QWidget):
         self.delete_act.triggered.connect(self.delete_goal)
 
     def arrangeWidgets(self):
-        self.label = QLabel(self.goal_id + " " + self.goal_name)
-        self.label.setFont(QFont("Calibri", 30))
+        font = QFont("Calibri", 30)
+        metrics = QFontMetrics(font)
+        text = metrics.elidedText(self.goal_id + " " + self.goal_name, Qt.TextElideMode.ElideRight, 420)
+        self.label = QLabel(text)
+        self.label.setFont(font)
         self.icon = GoalProgressBar(self.d_diff, self.goal_progress, self.isMain, self.state)
 
         h_box = QHBoxLayout()
@@ -1073,7 +1079,7 @@ class ListWidgetItem(QListWidgetItem):
 class SkillCharactWidget(QWidget):
     def __init__(self, text, value, data_type, spacing=False):
         super().__init__()
-        label = QLabel(text)
+        self.label = QLabel(text)
         self.name = text
         self.data_type = data_type
         self.delete_button = QPushButton()
@@ -1081,16 +1087,18 @@ class SkillCharactWidget(QWidget):
         self.delete_button.setObjectName("Tool")
         self.delete_button.setFixedSize(20, 20)
         h_box = QHBoxLayout()
-        h_box.addWidget(label)
+        h_box.addWidget(self.label)
         if data_type != "displaying charact":
             self.value_edit = QLineEdit(value)
             self.value_edit.setFixedWidth(108)
+            validator = QRegularExpressionValidator(QRegularExpression("[0-9][0-9]*\.?[0-9]+$"))
+            self.value_edit.setValidator(validator)
             h_box.addWidget(self.value_edit)
-        h_box.addWidget(self.delete_button)
-        if spacing:
-            h_box.addSpacing(21)
+            metrics = QFontMetrics(self.label.font())
+            text = metrics.elidedText(self.name, Qt.TextElideMode.ElideRight, 85)
+            self.label.setText(text)
+            h_box.addWidget(self.delete_button)
         self.setLayout(h_box)
-        self.setFixedWidth(250)
 
     def setReadOnly(self):
         self.value_edit.setReadOnly(True)
@@ -1340,7 +1348,7 @@ class TimeBlock(QGraphicsItem):
 
         if self.inPlan:
             metrics = QFontMetrics(font10)
-
+            self.start_button_rect = QRect()
             if self.block_rect[2] >= 54:
                 self.start_button_rect = QRect(10, self.block_rect[1] + 25, 23, 23)
                 painter.drawPixmap(self.start_button_rect.x(), self.start_button_rect.y(), QPixmap(r"Files\icons\start task.png"))
@@ -1836,8 +1844,6 @@ class TimeBlockDialog(QDialog):
         if text not in self.skills_list.addedItemsText:
             widget = SkillCharactWidget(text, "", "Skills")
             widget.value_edit.setText(str(value))
-            widget.setFixedWidth(165)
-            widget.value_edit.setFixedWidth(75)
             item = QListWidgetItem()
             item.setSizeHint(widget.sizeHint())
             widget.delete_button.clicked.connect(lambda: self.remove_skill(item))

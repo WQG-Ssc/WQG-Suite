@@ -223,9 +223,7 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.setFixedSize(450, 350)
         self.setWindowIcon(QIcon(app_icon_path))
-
         self.setUpMainWindow()
-        self.show()
 
     def setUpMainWindow(self):
         self.main_timer = QTimer()
@@ -378,10 +376,10 @@ class MainWindow(QMainWindow):
         plan_v_box.addLayout(plan_h_box)
         plan_v_box.setContentsMargins(0, 0, 0, 0)
         self.day_plan_widget.setLayout(plan_v_box)
-
-        self.title_edit.textChanged.connect(self.expand_line_edit)
-
         self.stacked_widget.addWidget(container)
+        self.show()
+        self.title_edit.textChanged.connect(self.expand_line_edit)
+        self.expand_line_edit()
 
     def listen(self):
         data = DataManager.listen()
