@@ -476,13 +476,13 @@ def addSkillStat(task_id, task_time, date):
         skill_value = float(task_time)
     elif task[0] == "t":
         if ws.getBusyValue(task_id):
-            used_skills = loadMainData("task", task[1], one=True)[1]
+            used_skills = loadMainData("task", task[1], one=True)[0]
             skill_list = []
             skills_values = []
             for skill in used_skills.split(","):
                 name, p = skill.split(":")
                 skill_list.append(f"[{name}]")
-                skills_values.append(task_time * (p / 100))
+                skills_values.append(str(task_time * (float(p) / 100)))
             skill = ",".join(skill_list)
             skill_value = ",".join(skills_values)
         else:

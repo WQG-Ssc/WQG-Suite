@@ -1691,6 +1691,7 @@ class StatisticsEditor(QDialog):
                                     start_time = "0:00:00"
 
                                 task_id_list.append(day_stat[1])
+                                print(day_stat)
                                 end_time = ws.to_str(int(ws.calculate_msecs(start_time) + (float(day_stat[0]) * 3600000)))
                                 time_dict[date] = end_time
                                 DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
