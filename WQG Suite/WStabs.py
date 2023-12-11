@@ -1010,13 +1010,11 @@ class GoalTab(QWidget):
         depth = len(parent_id.split(".")) + 1
         
         ids = DataManager.loadMainData("get_goal_ids", parent_id)
-        print(f"ids:{ids}")
         level_len = 0
         for iD in ids:
             idl = iD[0].split(".")
             if len(idl) == depth:
                 level_len += 1
-        print(f"{parent_id}.{level_len + 1}")
         return f"{parent_id}.{level_len + 1}"
 
     def saveData(self):
@@ -1595,7 +1593,11 @@ class StatisticsEditor(QDialog):
         day = DataManager.loadMainData("day_data", date.toString("yyyy-MM-dd"), one=True)
         if day:
             for i in range(len(self.second_tab_cells)):
-                self.second_tab_cells[i].setText(str(day[i]))
+                d = day[i]
+                if not d:
+                    d = ""
+                else: d = str(d)
+                self.second_tab_cells[i].setText(d)
         else:
             for cell in self.second_tab_cells:
                 cell.setText("")
@@ -1691,7 +1693,6 @@ class StatisticsEditor(QDialog):
                                     start_time = "0:00:00"
 
                                 task_id_list.append(day_stat[1])
-                                print(day_stat)
                                 end_time = ws.to_str(int(ws.calculate_msecs(start_time) + (float(day_stat[0]) * 3600000)))
                                 time_dict[date] = end_time
                                 DataManager.addSkillStat(day_stat[1], float(day_stat[0]), date)
@@ -2028,6 +2029,8 @@ class Top12Tab(QWidget):
         for goal in DataManager.loadOtherData("top 12"):
             goal_info = DataManager.loadMainData("goal", goal[1], one=True)
             image_path = goal_info[9]
+            if image_path:
+                image_path = image_path.split(",")[0]
             goal_info = [goal[0], goal_info[1], goal_info[2], goal_info[4], goal[1]]
             self.add_item(goal_info, image_path)
 

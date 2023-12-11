@@ -1,4 +1,4 @@
-# -*- coding: cp1251 -*-
+п»ї# -*- coding: utf-8 -*-
 import os, math, random, configparser
 import DataManager
 from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QMessageBox, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QButtonGroup, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem, QRadioButton, QTimeEdit
@@ -273,14 +273,15 @@ class TodayPhraseWidget(QWidget):
         phrase_label.setWordWrap(True)
 
     def get_today_phrase(self):
+        default = False
         current_date = QDate.currentDate().toString("yyyy-MM-dd")
         parser = configparser.ConfigParser()
         parser.read(user_config_file)
         if parser.get("Data", "last_showed_phrase_date") == current_date:
             phrase_name = parser.get("Data", "last_showed_phrase")
             author = DataManager.loadOtherData("phrase author", phrase_name, one=True)[0]
-            image = DataManager.loadOtherData("author", author, one=True)[0]
-            if image:
+            image = DataManager.loadOtherData("author", author, one=True)
+            if image and any(image):
                 image = image[0]
             else:
                 image = r"Files\icons\default_profile_image.png"
@@ -296,13 +297,14 @@ class TodayPhraseWidget(QWidget):
             if default:
                 image = r"Files\Icon.png"
             else:
-                image = DataManager.loadOtherData("author", phrase[1], one=True)[0]
-                if image:
+                image = DataManager.loadOtherData("author", phrase[1], one=True)
+                if image and any(image):
                     image = image[0]
                 else:
                     image = r"Files\icons\default_profile_image.png"
             phrase_name, author = phrase[:2]
 
+        
         pixmap = QPixmap(image).scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         size = pixmap.size()
         if size.width() > 120:
@@ -314,7 +316,7 @@ class TodayPhraseWidget(QWidget):
             with open(user_config_file, "w") as config_file:
                 parser.write(config_file)
 
-        return phrase_name, "—" + author, pixmap
+        return phrase_name, "вЂ”" + author, pixmap
 
     def paintEvent(self, event):
         self.painter.begin(self)
@@ -487,7 +489,7 @@ class AdditionalImagesLabel(QLabel):
 
     def getImagesList(self):
         if self.directory:
-            self.images_list.insert(1, "dir#" + self.directory)#Приводим к формату: image,dir:dir,image,...
+            self.images_list.insert(1, "dir#" + self.directory)#РџСЂРёРІРѕРґРёРј Рє С„РѕСЂРјР°С‚Сѓ: image,dir:dir,image,...
             images = ",".join(self.images_list)
         else:
             images = ",".join(self.images_list)
@@ -609,7 +611,7 @@ class AddtionalImagesWindow(QWidget):
         self.count_label.setText((f'{self.current_image_index + 1}/{self.all_images_amount}'))
 
     def setImage(self):
-        if self.current_image_index >= self.non_dir_images_amount: #По кол-ву изображений из директории и индекса текущего изображения определяет, относительный или абсолютный путь
+        if self.current_image_index >= self.non_dir_images_amount: #РџРѕ РєРѕР»-РІСѓ РёР·РѕР±СЂР°Р¶РµРЅРёР№ РёР· РґРёСЂРµРєС‚РѕСЂРёРё Рё РёРЅРґРµРєСЃР° С‚РµРєСѓС‰РµРіРѕ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РѕРїСЂРµРґРµР»СЏРµС‚, РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Р№ РёР»Рё Р°Р±СЃРѕР»СЋС‚РЅС‹Р№ РїСѓС‚СЊ
             self.image = QPixmap(os.path.join(self.directory, self.all_images[self.current_image_index]))
             self.remove_button.setEnabled(False)
         else:
@@ -863,8 +865,9 @@ class GraphItem(QWidget):
         y = []
         stat = DataManager.loadMainData("days_data", self.name)
         for s in stat:
-            x.append(s[0])
-            y.append(s[1])
+            if s[0] != "" and s[1] != "":
+                x.append(s[0])
+                y.append(s[1])
         return x, y
 
     def get_skill_vals(self):
@@ -1369,7 +1372,7 @@ class TimeBlock(QGraphicsItem):
             y = value.y()
             block_x = x + self.block_rect[0]
             block_y = y + self.block_rect[1]
-            #Проверяем соответствие будущих координат стандартным правилам
+            #РџСЂРѕРІРµСЂСЏРµРј СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ Р±СѓРґСѓС‰РёС… РєРѕРѕСЂРґРёРЅР°С‚ СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рј РїСЂР°РІРёР»Р°Рј
             if block_x <= 0:
                 self.object.switch_week_req.emit("previous")
                 x = -1 * self.block_rect[0]
@@ -1381,7 +1384,7 @@ class TimeBlock(QGraphicsItem):
                 y = -1 * self.block_rect[1]
             if block_y + self.block_rect[2] > 864:
                 y = 864 - self.block_rect[1] - self.block_rect[2]
-            #Корректируем координаты (шаг для x - один день, для y - 15 минут)
+            #РљРѕСЂСЂРµРєС‚РёСЂСѓРµРј РєРѕРѕСЂРґРёРЅР°С‚С‹ (С€Р°Рі РґР»СЏ x - РѕРґРёРЅ РґРµРЅСЊ, РґР»СЏ y - 15 РјРёРЅСѓС‚)
             x = ((x - 112) // self.width) * self.width + self.width
             y = y // 9 * 9
             block_x = x + self.block_rect[0]

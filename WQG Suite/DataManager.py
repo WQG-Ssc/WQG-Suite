@@ -1,9 +1,11 @@
+import configparser
 import sqlite3 as sql
 import WSwidgets as ws
 import re, socket
 from PyQt6.QtCore import QDate
 main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
+user_config_file = r"Files\config\user.ini"
 
 def exception_handler(func):
     def wrapper(*args, **kwargs):
@@ -38,7 +40,7 @@ def loadMainData(data_type, *args, one=False):
         cur.execute("SELECT * FROM Skills")
 
     if data_type == "days_data":
-        cur.execute(f"SELECT date, [{args[0]}] FROM Days")
+        cur.execute(f"SELECT date, [{args[0]}] FROM Days WHERE [{args[0]}] IS NOT NULL ORDER BY date")
 
     if data_type == "day_data":
         cur.execute("SELECT [Mental state], [Physical state], [Day rate], [Work time] FROM Days WHERE date == ?", args)
@@ -53,16 +55,16 @@ def loadMainData(data_type, *args, one=False):
         cur.execute("SELECT c_type, v_type FROM Characteristics WHERE name == ?", args)
 
     if data_type == "skill_stat":
-        cur.execute(f"SELECT date, [{args[0]}] FROM Skills_statistics WHERE [{args[0]}] IS NOT NULL")
+        cur.execute(f"SELECT date, [{args[0]}] FROM Skills_statistics WHERE [{args[0]}] IS NOT NULL ORDER BY date")
 
     if data_type == "statistics":
-        cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID == ?", args)
+        cur.execute("SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID == ? ORDER BY date", args)
 
     if data_type == "day_stats":
         cur.execute("SELECT start_time, end_time, task_ID FROM Main_statistics WHERE date == ? ORDER BY start_time", args)
 
     if data_type == "group_statistics":
-        cur.execute(f"SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%'")
+        cur.execute(f"SELECT start_time, end_time, date FROM Main_statistics WHERE task_ID LIKE '{args[0]}.%' ORDER BY date")
 
     if data_type == "graph_color":
         cur.execute("SELECT color FROM Graphs WHERE name == ?", args)
@@ -83,11 +85,10 @@ def loadMainData(data_type, *args, one=False):
         cur.execute("SELECT start_time, end_time, task_ID FROM Plans WHERE date == ? ORDER BY start_time", args)
 
     if data_type == "recently completed goals":
-        date = QDate.currentDate().addDays(-7).toString("yyyy-MM-dd")
-        cur.execute(f"SELECT name, files, time FROM Goals WHERE limit_date > {date} and state == 'completed'")
+        date = QDate.currentDate().addDays(-8).toString("yyyy-MM-dd")
+        cur.execute(f"SELECT name, files, time FROM Goals WHERE limit_date > '{date}' and state == 'completed'")
 
     if data_type == "completing goals":
-        date = QDate.currentDate().addDays(-7).toString("yyyy-MM-dd")
         cur.execute(f"SELECT name, files, progress, time, custom_characteristics FROM Goals WHERE state == 'completing'")
 
     if data_type == "author":
@@ -125,13 +126,10 @@ def saveMainData(data_type, args):
         cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time') VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "day_data":
-        print(args)
         cur.execute("SELECT date FROM Days WHERE date == ?", (args[4],))
         if cur.fetchone():
-            print(f"1: {args}")
             cur.execute("UPDATE Days SET 'Mental state' = ?, 'Physical state' = ?, 'Day rate' = ?, 'Work time' = ? WHERE date == ?", args)
         else:
-            print(f"2: {args}")
             cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', 'Work time', date) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "statistics":
@@ -260,7 +258,7 @@ def loadOtherData(data_type, *args, one=False):
         cur.execute("SELECT image FROM Authors WHERE name == ?", args)
 
     if data_type == "phrase author":
-        cur.execute("SELECT author FROM Phrases WHERE name == ?", args)
+        cur.execute("SELECT author FROM Phrases WHERE name = ?", args)
 
     if data_type == "phrases for day":
         cur.execute("SELECT name, author FROM Phrases WHERE date == ?", args)
@@ -300,6 +298,19 @@ def deleteOtherData(data_type, *args):
         cur.execute("DELETE FROM Phrases WHERE name == ?", args)
     if data_type == "author":
         cur.execute("DELETE FROM Authors WHERE name == ?", args)
+        cur.execute("SELECT name FROM Phrases WHERE author == ?", args)
+        parser = configparser.ConfigParser()
+        parser.read(user_config_file)
+        last_showed_phrase = parser.get("Data", "last_showed_phrase")
+        phrases = cur.fetchall()
+        if phrases:
+            for phrase in phrases:
+                if phrase[0] == last_showed_phrase:
+                    parser.set("Data", "last_showed_phrase", "")
+                    parser.set("Data", "last_showed_phrase_date", "")
+            with open(user_config_file, "w") as config_file:
+                parser.write(config_file)
+
         cur.execute("DELETE FROM Phrases WHERE author == ?", args)
     if data_type == "top goal":
         cur.execute("DELETE FROM Top12 WHERE goal_id == ?", args)
