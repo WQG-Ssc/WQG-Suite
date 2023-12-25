@@ -56,7 +56,9 @@ class MainWindow(QMainWindow):
         self.isGoalListNeedsToBeUpdated = False
         self.dialog = None
         self.dialog1 = None
-        self.showAnimation()
+        #self.showAnimation()
+        self.setUpMainWindow()
+        self.showMaximized()
 
     def showAnimation(self):
         self.dialog = ws.AnimationDialog()
@@ -311,7 +313,7 @@ class MainWindow(QMainWindow):
         self.dialog.show()
 
     def show_about(self):
-        QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.0.1</font></p>""")
+        QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.0.2</font></p>""")
 
     def edit_profile(self):
         self.dialog1 = QDialog()

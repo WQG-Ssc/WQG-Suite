@@ -752,14 +752,15 @@ class MainWindow(QMainWindow):
             task_id = setting_mode[2]
             date = setting_mode[3]
         else:
-            end_time = QTime.currentTime().toString()
             start_time = self.interval_start_time
+            end_time = QTime.currentTime().toString()
             task_id = self.current_block.task_id
             date = self.current_date_str
+        busy = ws.getBusyValue(task_id)
         try:
             conn = sql.connect(data_base)
             cur = conn.cursor()
-            cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, 1)", (start_time, end_time, task_id, date))
+            cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", (start_time, end_time, task_id, date, busy))
             conn.commit()
             conn.close()
         except sql.Error as error:

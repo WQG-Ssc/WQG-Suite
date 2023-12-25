@@ -170,7 +170,7 @@ def updateMainData(data_type, args):
         cur.execute("UPDATE Characteristics SET name = ?, c_type = ?, v_type = ? WHERE name == ?", args)
 
     if data_type == "goal_characts":
-        cur.execute("UPDATE Goals SET cc_stats = ?, progress = ? WHERE ID == ?", args)
+        cur.execute("UPDATE Goals SET cc_stats = ?, progress = ?, state = ? WHERE ID == ?", args)
 
     if data_type == "progress":
         cur.execute("UPDATE Goals SET progress = ? WHERE ID == ?", args)
@@ -258,10 +258,13 @@ def loadOtherData(data_type, *args, one=False):
         cur.execute("SELECT image FROM Authors WHERE name == ?", args)
 
     if data_type == "phrase author":
-        cur.execute("SELECT author FROM Phrases WHERE name = ?", args)
+        cur.execute(f"SELECT author FROM Phrases WHERE name = '{args[0]}'")
 
     if data_type == "phrases for day":
         cur.execute("SELECT name, author FROM Phrases WHERE date == ?", args)
+
+    if data_type == "phrase date":
+        cur.execute("SELECT date FROM Phrases WHERE name == ?", args)
 
     if data_type == "phrases":
         cur.execute("SELECT name, author, date FROM Phrases")
@@ -426,7 +429,7 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
         cur.execute("UPDATE Goals SET used_skills = ?, time = ? WHERE ID == ?", (skills, time, supergoal_id))
     conn.commit()
     conn.close()
-    recalculateProgress(supergoal_id, progress.split(":")[1], supergoal_cc_stats, True)
+    recalculateProgress(supergoal_id, progress.split(":")[1], True)
 
 @exception_handler
 def getGoalTree(goal_id):
@@ -439,7 +442,7 @@ def getGoalTree(goal_id):
     conn.close()
     return goal_tree
 
-def recalculateProgress(goal_id, p_charact, cc_stats, isGroup=False, returning=False):#Recalculates progress of given goal
+def recalculateProgress(goal_id, p_charact, isGroup=False, returning=False):#Recalculates progress of given goal
     if p_charact == "Hours":
         goal_time = 0
         records = loadMainData("statistics", goal_id)

@@ -60,7 +60,7 @@ class Goal(QObject):
             characts_edits[0].setReadOnly(False)
         for i in range(4):
             if i == 0:
-                characts_edits[i].setText(str(round(float(standard_characts_values[i]), 2)))
+                characts_edits[i].setText(str(round(float(standard_characts_values[i]), 1)))
             else:
                 characts_edits[i].setText(str(standard_characts_values[i]))
 

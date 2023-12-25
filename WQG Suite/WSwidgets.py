@@ -263,14 +263,25 @@ class TodayPhraseWidget(QWidget):
         author_label.setStyleSheet("color: white")
         author_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         author_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        phrase_label = QLabel(phrase, self)
-        phrase_label.setFont(QFont("Calibri", 18, italic=True))
+
+        phrase_label = QLabel(self)
         phrase_label.setStyleSheet("color: white")
         phrase_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         phrase_label.setFixedSize(272, 52)
         phrase_label.setGeometry(145, 23, 272, 52)
         phrase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         phrase_label.setWordWrap(True)
+        font_size = 18
+        height = 273
+        width = 0
+        while width > 272 or height > 52:
+            font = QFont("Calibri", font_size, italic=True)
+            text_size = QFontMetrics(font).boundingRect(QRect(0, 0, 272, 52), Qt.TextFlag.TextWordWrap, phrase)
+            width = text_size.width()
+            height = text_size.height()
+            font_size -= 1
+        phrase_label.setFont(font)
+        phrase_label.setText(phrase)
 
     def get_today_phrase(self):
         default = False
@@ -280,6 +291,7 @@ class TodayPhraseWidget(QWidget):
         if parser.get("Data", "last_showed_phrase_date") == current_date:
             phrase_name = parser.get("Data", "last_showed_phrase")
             author = DataManager.loadOtherData("phrase author", phrase_name, one=True)[0]
+            
             image = DataManager.loadOtherData("author", author, one=True)
             if image and any(image):
                 image = image[0]
@@ -303,7 +315,6 @@ class TodayPhraseWidget(QWidget):
                 else:
                     image = r"Files\icons\default_profile_image.png"
             phrase_name, author = phrase[:2]
-
         
         pixmap = QPixmap(image).scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         size = pixmap.size()
@@ -1094,8 +1105,9 @@ class SkillCharactWidget(QWidget):
         if data_type != "displaying charact":
             self.value_edit = QLineEdit(value)
             self.value_edit.setFixedWidth(108)
-            validator = QRegularExpressionValidator(QRegularExpression("[0-9][0-9]*\.?[0-9]+$"))
-            self.value_edit.setValidator(validator)
+            if data_type == "Skills" or data_type == "Characteristics" and DataManager.loadMainData("characteristic", text, one=True)[0] == "dynamic":
+                validator = QRegularExpressionValidator(QRegularExpression("[0-9][0-9]*\.?[0-9]+$"))
+                self.value_edit.setValidator(validator)
             h_box.addWidget(self.value_edit)
             metrics = QFontMetrics(self.label.font())
             text = metrics.elidedText(self.name, Qt.TextElideMode.ElideRight, 85)
@@ -1530,12 +1542,13 @@ class WeekPlanView(QGraphicsView):
             prev_task_id = ""
             prev_block_i = ""
             for record in day_records:
+                gap_time = 0
                 start_time, end_time, task_id = record
                 current_block_i = len(self.blocks_dict[n])
                 
                 if prev_end_time:
                     gap_time = calculate_msecs(start_time) - calculate_msecs(prev_end_time)
-                if prev_task_id == task_id and gap_time < 1800000 and used_table == "stats":
+                if prev_task_id == task_id and gap_time < 1800000 and used_table == "stats" and self.week_view:#Block joining algorithm
                     current_block_i = prev_block_i
                     block = self.blocks_dict[n][current_block_i]
                     block.end_time = end_time

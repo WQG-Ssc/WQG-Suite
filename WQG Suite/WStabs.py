@@ -590,40 +590,24 @@ class GoalTab(QWidget):
         charact_edit.setValidator(validator)
 
         charact_type_label = QLabel("Choose characteristic type:")
-        
         static_rb = QRadioButton("static")
         dynamic_rb = QRadioButton("dynamic")
+
         self.charact_type_group = QButtonGroup()
         self.charact_type_group.addButton(static_rb)
         self.charact_type_group.addButton(dynamic_rb)
-        self.charact_type_group.buttonToggled.connect(self.update_widget)
-
-        value_type_label = QLabel("Choose value type:")
-        quantitative_rb = QRadioButton("quantitative")
-        self.category_rb = QRadioButton("category")
-
-        self.value_type_group = QButtonGroup()
-        self.value_type_group.addButton(quantitative_rb)
-        self.value_type_group.addButton(self.category_rb)
 
         v_box = QVBoxLayout()
         v_box.addWidget(charact_edit)
         v_box.addWidget(charact_type_label)
         v_box.addWidget(static_rb)
         v_box.addWidget(dynamic_rb)
-        v_box.addWidget(value_type_label)
-        v_box.addWidget(quantitative_rb)
-        v_box.addWidget(self.category_rb)
         v_box.addStretch()
 
         if object_manager.isSelected:
             charact_name = line_edit.text()
             charact_edit.setText(charact_name)
             charact_info = DataManager.loadMainData("characteristic", charact_name, one=True)
-            if charact_info[1] == "category":
-                self.category_rb.setChecked(True)
-            else:
-                quantitative_rb.setChecked(True)
 
             if charact_info[0] == "static":
                 static_rb.setChecked(True)
@@ -654,12 +638,10 @@ class GoalTab(QWidget):
         charact_name = charact_edit.text()
         old_charact_name = line_edit.text()
         charact_type = ""
-
-        if self.charact_type_group.checkedButton() and self.value_type_group.checkedButton():
+        if self.charact_type_group.checkedButton():
             charact_type = self.charact_type_group.checkedButton().text()
-            value_type = self.value_type_group.checkedButton().text()
-
-        if charact_name and charact_type and value_type:
+        value_type = ""
+        if charact_name and charact_type:
             if obj_manager.isSelected:
                 DataManager.updateMainData("Characteristics", [charact_name, charact_type, value_type, old_charact_name])
             else:
@@ -669,18 +651,7 @@ class GoalTab(QWidget):
             obj_manager.load_data()
             line_edit.setText(charact_name)
         else:
-            QMessageBox.warning(self.dialog1, "Failed to create a custom characteristic", "Not all the required information were entered")
-
-    def update_widget(self, button):
-        if button.text() == "dynamic":
-            self.value_type_group.setExclusive(False)
-            self.category_rb.setChecked(False)
-            self.category_rb.setEnabled(False)
-            self.value_type_group.setExclusive(True)
-        elif button.text() == "static":
-            self.value_type_group.setExclusive(False)
-            self.category_rb.setEnabled(True)
-            self.value_type_group.setExclusive(True)
+            QMessageBox.warning(self.dialog1, "Warning", "Not all the required information were entered")
 
     def add_skill_or_charact(self, standard_mode=[], setting_mode=[]):
         if setting_mode:
@@ -692,6 +663,8 @@ class GoalTab(QWidget):
             object_name = line_edit.text()
         if setting_mode or object_manager.isSelected and object_name not in list_widget.addedItemsText:
             item = QListWidgetItem()
+            if object_value.replace(".", "").isdigit():
+                object_value = str(round(float(object_value), 1))
             widget = ws.SkillCharactWidget(object_name, object_value, data_type, spacing=True)
             widget.value_edit.textEdited.connect(lambda: self.skill_or_charact_changed(widget.value_edit, list_widget, object_name))
             widget.delete_button.clicked.connect(lambda: self.remove_skill_or_charact(item, object_name, list_widget, data_type))
@@ -783,7 +756,7 @@ class GoalTab(QWidget):
         new_id = id_edit.text()
         calc_mode = calc_combo.currentText()
         if calc_mode != self.old_progress_calc_mode:
-            self.goals_dict[self.current_goal_id].goal_data[10] = DataManager.recalculateProgress(self.current_goal_id, calc_mode, self.goals_dict[self.current_goal_id].goal_data[12], self.goals_dict[self.current_goal_id].goal_data[13], returning=True)
+            self.goals_dict[self.current_goal_id].goal_data[10] = DataManager.recalculateProgress(self.current_goal_id, calc_mode, self.goals_dict[self.current_goal_id].goal_data[13], returning=True)
             self.setSaveEnabled()
 
         if new_id != self.current_goal_id:
@@ -941,7 +914,7 @@ class GoalTab(QWidget):
         if not goal_progress:
             goal_progress = "0:Hours"
         elif goal_progress.split(":")[1] != "Hours" and goal_progress.split(":")[1] not in cc_list_widget.addedItemsText:#Means the charact by which was calculating progress was deleted
-            self.goals_dict[self.current_goal_id].goal_data[10] = DataManager.recalculateProgress(self.current_goal_id, "Hours", self.goals_dict[self.current_goal_id].goal_data[12], self.goals_dict[self.current_goal_id].goal_data[13], returning=True)
+            self.goals_dict[self.current_goal_id].goal_data[10] = DataManager.recalculateProgress(self.current_goal_id, "Hours", self.goals_dict[self.current_goal_id].goal_data[13], returning=True)
             goal_progress = self.goals_dict[self.current_goal_id].goal_data[10]
 
         if (goal_name and len(characts) == 4 and used_skills and full_cc_values and skills_valid) or (is_group and goal_name and len(characts) > 2):
@@ -1415,7 +1388,7 @@ class Form(QDialog):
                         else:
                             cc_stats_str = goal_cc_stats
 
-                    DataManager.updateMainData("goal_characts", [cc_stats_str, f"{value}:{p_charact}", goal_id])
+                    DataManager.updateMainData("goal_characts", [cc_stats_str, f"{value}:{p_charact}", "completing", goal_id])
                     if len(goal_id.split(".")) > 2:
                         layers = goal_id.split(".")
                         while len(layers) > 2:
@@ -1455,8 +1428,7 @@ class Form(QDialog):
                                 else:
                                     diary_path = None
                             if doc:
-                                text_lines = [self.current_date]
-                                text_lines += self.day_note.toPlainText().split("\n")
+                                text_lines = [self.current_date] + self.day_note.toPlainText().split("\n")
                                 for line in text_lines:
                                     doc.add_paragraph(line)
                                 doc.save(diary_path)
@@ -1475,7 +1447,7 @@ class Form(QDialog):
                 if len(item.task_id.split(".")) > 1:
                     self.add_goal_item(item.task_id)
                 if ws.getBusyValue(item.task_id):
-                    time += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                    time += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time) - item.gap_time
         time /= 3600000
         self.time_label.setText(f"Time: {time}")
 
@@ -1493,7 +1465,7 @@ class StatisticsEditor(QDialog):
         self.edit_mode = QComboBox()
         self.edit_mode.addItems(["Goal custom characteristic statistics", "Day info", "load main statistics"])#"Day schedule"
         self.edit_mode.activated.connect(self.switch_tab)
-        ok_button = QPushButton("OK")
+        ok_button = QPushButton("Write")
         ok_button.clicked.connect(self.save_data)
 
         main_v_box = QVBoxLayout()
@@ -1645,10 +1617,14 @@ class StatisticsEditor(QDialog):
                 success = DataManager.updateMainData("goal_characts_stats", [stats_str, self.goal_id])
                 layers = self.goal_id.split(".")
 
-                while len(layers) > 2:
-                    DataManager.recalculateValues(layers)
-                    supergoal_id = ".".join(layers[:-1])
-                    layers.pop(-1)
+                if len(layers) == 2:
+                    goal = DataManager.loadMainData("goal", self.goal_id, one=True)
+                    DataManager.recalculateProgress(self.goal_id, goal[10].split(":")[1])
+                else:
+                    while len(layers) > 2:
+                        DataManager.recalculateValues(layers)
+                        supergoal_id = ".".join(layers[:-1])
+                        layers.pop(-1)
 
             if index == 1:
                 if self.stats:
@@ -1705,7 +1681,7 @@ class StatisticsEditor(QDialog):
                 for task_id in task_id_list:
                     if len(task_id.split(".")) > 1: #determinating if task_id is goal_id or not
                         goal_data = DataManager.loadMainData("goal", task_id, one=True)
-                        DataManager.recalculateProgress(task_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
+                        DataManager.recalculateProgress(task_id, goal_data[10].split(":")[1], goal_data[13])
                         DataManager.updateMainData("goal_state", ["completing", task_id])
 
                         if len(task_id.split(".")) > 2:
@@ -1714,11 +1690,12 @@ class StatisticsEditor(QDialog):
                                 goal_id = ".".join(layers[:-1])
                                 goal_data = DataManager.loadMainData("goal", goal_id, one=True)
                                 DataManager.updateMainData("goal_state", ["completing", task_id])
-                                DataManager.recalculateProgress(goal_id, goal_data[10].split(":")[1], goal_data[12], goal_data[13])
+                                DataManager.recalculateProgress(goal_id, goal_data[10].split(":")[1], goal_data[13])
                                 layers.pop(-1)
 
                 DataManager.recalculateSkills()
-                DataManager.recalculateDaysWorkTime()
+                if QMessageBox.question(self, "Question", "Is it necessary to recalculate days work time?") == QMessageBox.StandardButton.Yes:
+                    DataManager.recalculateDaysWorkTime()
             if success == True:
                 QMessageBox.information(self, "Data has been written", "Data has been written")
             elif success == False:
@@ -1808,6 +1785,7 @@ class Plans(QWidget):
         main_v_box.addLayout(time_h_box)
         main_v_box.addStretch()
         main_v_box.setContentsMargins(0, 0, 0, 0)
+        self.recalculate_time()
         self.setLayout(main_v_box)
 
     def recalculate_time(self):
@@ -1815,7 +1793,8 @@ class Plans(QWidget):
         for i in range(7):
             time = 0
             for item in blocks_dict[i]:
-                time += (ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)) / 3600000
+                if ws.getBusyValue(item.task_id):
+                    time += (ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)) / 3600000
             self.time_labels[i].setText(str(round(time, 2)) + " hours")
 
     def move_item_to_week(self, mode, items):
@@ -1982,15 +1961,19 @@ class PhrasesEditor(QDialog):
             self.date_edit.setEnabled(False)
 
     def add_phrase(self):
-        if self.phrase_edit.text() and self.author_edit.text() and self.authors_om.isSelected:
-            if self.date_checkbox.isChecked():
-                date = self.date_edit.text()
+        phrase = self.phrase_edit.text().rstrip()
+        if phrase and self.author_edit.text() and self.authors_om.isSelected:
+            if len(phrase) < 241:
+                if self.date_checkbox.isChecked():
+                    date = self.date_edit.text()
+                else:
+                    date = None
+                DataManager.saveOtherData("phrase", date, phrase, self.author_edit.text())
+                self.author_edit.clear()
+                self.phrase_edit.clear()
+                self.phrases_om.load_data()
             else:
-                date = None
-            DataManager.saveOtherData("phrase", date, self.phrase_edit.text(), self.author_edit.text())
-        self.author_edit.clear()
-        self.phrase_edit.clear()
-        self.phrases_om.load_data()
+                QMessageBox.warning(self, "Warning", "Phrase must be shorter than 240 characters")
 
     def delete_phrase(self):
         if self.phrase_edit.text() == self.last_showed_phrase:
@@ -2008,6 +1991,13 @@ class PhrasesEditor(QDialog):
 
     def phrase_selected(self, text, goal_id, obj_type):
         self.author_edit.blockSignals(True)
+        date = DataManager.loadOtherData("phrase date", text, one=True)
+        if any(date):
+            date = date[0]
+            self.date_edit.setEnabled(True)
+            self.date_edit.setText(date)
+        else:
+            self.date_edit.setEnabled(False)
         self.author_edit.setText(DataManager.loadOtherData("phrase author", text, one=True)[0])
         self.author_edit.blockSignals(False)
 
