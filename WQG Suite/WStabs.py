@@ -998,7 +998,7 @@ class StatisticsTab(QWidget):
     def __init__(self):
         super().__init__()
         self.traces = []
-        self.graphs = {"Goals":[], "Skills":[], "standard":[]}
+        self.graphs = {"Goals":[], "Skills":[], "Tasks":[], "standard":[]}
         self.standard_colors = {}
         self.from_date = ""
         self.to_date = ""
@@ -1071,7 +1071,7 @@ class StatisticsTab(QWidget):
 
         self.setLayout(main_h_box)
 
-        self.object_manager = ws.ObjectManager(self, self.line_edit, ["Goals", "Skills"])
+        self.object_manager = ws.ObjectManager(self, self.line_edit, ["Goals", "Skills", "Tasks"])
         self.object_manager.selected.connect(self.add_graph)
 
     def toggle_date_selection(self, state):
@@ -1181,19 +1181,18 @@ class StatisticsTab(QWidget):
     def add_graph(self, name, goal_id, obj_type, value_type=None):
         if not value_type:
             self.line_edit.clear()
-        if (obj_type == "Goals" and goal_id not in self.graphs[obj_type]) or (obj_type != "Goals" and name not in self.graphs[obj_type]):
-            if obj_type == "Goals":
-                self.graphs[obj_type].append(goal_id)
-            else:
-                self.graphs[obj_type].append(name)
-            widget = ws.GraphItem(name, obj_type, goal_id, value_type)
-            widget.toggled.connect(self.display_graph)
-            widget.removed.connect(self.remove_graph)
-            item = QListWidgetItem()
-            item.setSizeHint(widget.sizeHint())
-            self.graphs_list_widget.addItem(item)
-            self.graphs_list_widget.setItemWidget(item, widget)
-            self.graphs_list_widget.setCurrentItem(item)
+        if obj_type == "Goals":
+            self.graphs[obj_type].append(goal_id)
+        else:
+            self.graphs[obj_type].append(name)
+        widget = ws.GraphItem(name, obj_type, goal_id, value_type)
+        widget.toggled.connect(self.display_graph)
+        widget.removed.connect(self.remove_graph)
+        item = QListWidgetItem()
+        item.setSizeHint(widget.sizeHint())
+        self.graphs_list_widget.addItem(item)
+        self.graphs_list_widget.setItemWidget(item, widget)
+        self.graphs_list_widget.setCurrentItem(item)
 
     def remove_graph(self, graph_widget):
         for i in range(self.graphs_list_widget.count()):
@@ -1213,6 +1212,7 @@ class Form(QDialog):
     def __init__(self):
         super().__init__()
         self.goals_with_dccs = []
+        self.day_time = 0
         parser = configparser.ConfigParser()
         parser.read(r"Files\config\user.ini")
         self.FormFillingDate = parser.get("Data", "FormFillingDate")
@@ -1354,7 +1354,7 @@ class Form(QDialog):
                 busy = ws.getBusyValue(item.task_id)
                 DataManager.saveMainData("statistics", [item.start_time, item.end_time, item.task_id, self.current_date, busy])
 
-            DataManager.saveMainData("day", [self.current_date] + day_stats + [float(self.time_label.text().replace("Time: ", ""))])
+            DataManager.saveMainData("day", [self.current_date] + day_stats + [self.day_time])
             for goal_id in self.records_dict.keys():
                 if len(goal_id.split(".")) > 1:
                     needs_calc = False
@@ -1447,9 +1447,9 @@ class Form(QDialog):
                 if len(item.task_id.split(".")) > 1:
                     self.add_goal_item(item.task_id)
                 if ws.getBusyValue(item.task_id):
-                    time += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time) - item.gap_time
-        time /= 3600000
-        self.time_label.setText(f"Time: {time}")
+                    time += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+        self.day_time = time / 3600000
+        self.time_label.setText(f"Time: {round(self.day_time, 2)} hours")
 
 class StatisticsEditor(QDialog):
     def __init__(self):
@@ -1771,9 +1771,9 @@ class Plans(QWidget):
         save_button.clicked.connect(self.save_plan)
 
         header_h_box = QHBoxLayout()
-        header_h_box.addWidget(self.date_label)
         header_h_box.addWidget(prev_week_button)
         header_h_box.addWidget(next_week_button)
+        header_h_box.addWidget(self.date_label)
         header_h_box.addWidget(self.date_edit_tool)
         header_h_box.addWidget(save_button)
         header_h_box.addStretch()
@@ -1784,7 +1784,7 @@ class Plans(QWidget):
         main_v_box.addWidget(self.week_plan_view)
         main_v_box.addLayout(time_h_box)
         main_v_box.addStretch()
-        main_v_box.setContentsMargins(0, 0, 0, 0)
+        main_v_box.setContentsMargins(1, 0, 0, 0)
         self.recalculate_time()
         self.setLayout(main_v_box)
 
@@ -1794,7 +1794,7 @@ class Plans(QWidget):
             time = 0
             for item in blocks_dict[i]:
                 if ws.getBusyValue(item.task_id):
-                    time += (ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)) / 3600000
+                    time += (ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time) - item.gap_time) / 3600000
             self.time_labels[i].setText(str(round(time, 2)) + " hours")
 
     def move_item_to_week(self, mode, items):

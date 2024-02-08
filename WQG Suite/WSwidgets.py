@@ -224,6 +224,7 @@ class CompletingGoalsWidget(QWidget):
             item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), goal[0])
         item.setTextAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
         item.setFlags(~Qt.ItemFlag.ItemIsSelectable)
+        item.id = goal[-1]
         return item
 
     def load_data(self):
@@ -376,6 +377,7 @@ def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
     image = QPixmap(image_path).scaled(diameter, diameter, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
     size = image.size()
     if size.height() > diameter or size.width() > diameter:
+        print(size.width() // 2 - (diameter / 2))
         image = image.copy(size.width() // 2 - (diameter / 2), size.height() // 2 - (diameter / 2), diameter, diameter)
     mask = QBitmap(diameter, diameter)
     mask.fill(Qt.GlobalColor.color0)
@@ -850,7 +852,7 @@ class GraphItem(QWidget):
         if state == 1:
             self.toggled.emit(self.name, "", [], [], state, color)
         else:
-            if self.graph_type == "Goals":
+            if self.graph_type == "Goals" or self.graph_type == "Tasks":
                 if self.showing_charact == "h":
                     self.x, self.y = self.get_vals_for_h()
                 else:
@@ -859,7 +861,7 @@ class GraphItem(QWidget):
                 self.x, self.y = self.get_skill_vals()
 
             elif self.graph_type == "standard":
-                self.x, self.y = self.get_graph_vals()
+                self.x, self.y = self.get_vals_for_h()
                 color = DataManager.loadMainData("graph_color", self.name, one=True)[0]
             if self.value_mode == "All time":
                 counter = 0
@@ -897,9 +899,12 @@ class GraphItem(QWidget):
     def get_vals_for_h(self):
         x = []
         y = []
-        stat = DataManager.loadMainData("statistics", self.goal_id)
-        if self.isGroup:
-            stat += DataManager.loadMainData("group_statistics", self.goal_id)
+        if self.graph_type == "Goals":
+            stat = DataManager.loadMainData("statistics", self.goal_id)
+            if self.isGroup:
+                stat += DataManager.loadMainData("group_statistics", self.goal_id)
+        else:
+            stat = DataManager.loadMainData("statistics", "t:" + self.name)
         previous_date = ""
         for s in stat:
             start_time = calculate_msecs(s[0])
@@ -983,10 +988,12 @@ class ObjectManager(QWidget):
         characts_button.setObjectName("Characteristics")
         graphs_button = QPushButton()
         graphs_button.setObjectName("Graphs")
+        tasks_button = QPushButton()
+        tasks_button.setObjectName("Tasks")
 
         h_box = QHBoxLayout()
         h_box.setContentsMargins(0, 0, 0, 0)
-        buttons = [goals_button, branches_button, skills_button, characts_button, graphs_button]
+        buttons = [goals_button, branches_button, skills_button, characts_button, graphs_button, tasks_button]
         self.filters = QButtonGroup()
         self.filters.setExclusive(False)
         
@@ -1255,7 +1262,6 @@ class TimeBlock(QGraphicsItem):
         self.block_dict = blocks_dict
         self.gap_periods = gap_periods
         self.used_table = used_table
-        self.brush = QBrush(QColor("#FFD300"))
         self.week = week
         self.inPlan = inPlan
         self.pen = None
@@ -1286,6 +1292,10 @@ class TimeBlock(QGraphicsItem):
 
     def updateTaskID(self, task_id):
         self.task_id = task_id
+        if getBusyValue(self.task_id):
+            self.brush = QBrush(QColor("#FFD300"))
+        else:
+            self.brush = QBrush(QColor("#877000"))
         if self.task_id:
             task = self.task_id.split(":")
             if len(task) > 1:
@@ -1483,6 +1493,7 @@ class WeekPlanView(QGraphicsView):
         self.start_point = None
         self.blocks_dict = {}
         self.max_end_time = 86400000
+        self.copied_task_id = ""
 
         self.delete_act = QAction("Delete block")
         self.delete_act.triggered.connect(self.delete_block)
@@ -1490,7 +1501,11 @@ class WeekPlanView(QGraphicsView):
         self.copy_act = QAction("Copy block")
         self.copy_act.triggered.connect(self.copy_block)
         self.copy_act.setShortcut("Ctrl+C")
-        self.addActions([self.delete_act, self.copy_act])
+        self.copy_name_act = QAction("Copy name")
+        self.copy_name_act.triggered.connect(self.copy_name)
+        self.paste_name_act = QAction("Paste name")
+        self.paste_name_act.triggered.connect(self.paste_name)
+        self.addActions([self.delete_act, self.copy_act, self.copy_name_act, self.paste_name_act])
 
         if week_view:
             self.scene.setSceneRect(0, 0, 1920, 864)
@@ -1576,6 +1591,7 @@ class WeekPlanView(QGraphicsView):
         if setItems:
             for item in setItems:
                 self.blocks_dict[item.day_index].append(item)
+
     def addBlock(self, time_block):
         time_block.updateBlockRect()
         self.blocks_dict[time_block.day_index].append(time_block)
@@ -1646,12 +1662,19 @@ class WeekPlanView(QGraphicsView):
 
     def contextMenuEvent(self, event):
         pos = event.pos()
-        if isinstance(self.itemAt(pos), TimeBlock):
-            item = self.itemAt(pos)
+        item = self.itemAt(pos)
+        if isinstance(item, TimeBlock):
             item.setSelected(True)
             self.menu = QMenu()
-            self.menu.addAction(self.delete_act)
-            self.menu.addAction(self.copy_act)
+            if item.used_table != "stats" or not item.week:
+                self.menu.addAction(self.delete_act)
+                self.menu.addAction(self.copy_act)
+                self.menu.addAction(self.copy_name_act)
+                self.menu.addAction(self.paste_name_act)
+            else:
+                self.menu.addAction(self.copy_act)
+                self.menu.addAction(self.copy_name_act)
+            
             self.menu.exec(self.mapToGlobal(pos))
         return super().contextMenuEvent(event)
     
@@ -1684,6 +1707,14 @@ class WeekPlanView(QGraphicsView):
             for block in copied_blocks:
                 block.setSelected(True)
             self.changesMade.emit()
+
+    def copy_name(self):
+        item = self.scene.selectedItems()
+        if item: self.copied_task_id = item[0].task_id
+
+    def paste_name(self):
+        item = self.scene.selectedItems()
+        if item and self.copied_task_id: item[0].updateTaskID(self.copied_task_id)
             
     def highlight_items(self):
         selected_items = self.scene.selectedItems()
@@ -1716,6 +1747,7 @@ class TimeBlockDialog(QDialog):
     def __init__(self, time_block):
         super().__init__()
         self.setModal(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowTitle("Block settings")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.goal_id = ""
@@ -1726,6 +1758,7 @@ class TimeBlockDialog(QDialog):
         self.to_te = QTimeEdit()
         self.to_te.setTime(QTime.fromString(self.time_block.end_time, "hh:mm:ss"))
         self.to_te.timeChanged.connect(self.update_time)
+
         start_time = calculate_msecs(self.time_block.start_time)
         end_time = calculate_msecs(self.time_block.end_time)
         self.time_label = QLabel(f"Time: {to_str(int((end_time - start_time - self.time_block.gap_time)))}")
@@ -1735,14 +1768,25 @@ class TimeBlockDialog(QDialog):
         self.line_edit.setPlaceholderText("Enter name")
 
         type_label = QLabel("Choose type:")
-        goal_rb = QRadioButton("Goal/skill")
-        task_rb = QRadioButton("Task")
-        time_rb = QRadioButton("Time name")
+        self.goal_rb = QRadioButton("Goal/skill")
+        self.task_rb = QRadioButton("Task")
+        self.time_rb = QRadioButton("Time name")
         self.button_group = QButtonGroup()
-        self.button_group.addButton(goal_rb)
-        self.button_group.addButton(task_rb)
-        self.button_group.addButton(time_rb)
+        self.button_group.addButton(self.goal_rb)
+        self.button_group.addButton(self.task_rb)
+        self.button_group.addButton(self.time_rb)
         self.button_group.buttonToggled.connect(self.toggle_mode)
+
+        self.goal_rb_act = QAction()
+        self.goal_rb_act.setShortcut("Ctrl+G")
+        self.goal_rb_act.triggered.connect(self.goal_rb.click)
+        self.task_rb_act = QAction()
+        self.task_rb_act.setShortcut("Ctrl+T")
+        self.task_rb_act.triggered.connect(self.task_rb.click)
+        self.time_name_rb_act = QAction()
+        self.time_name_rb_act.setShortcut("Ctrl+N")
+        self.time_name_rb_act.triggered.connect(self.time_rb.click)
+        self.addActions([self.goal_rb_act, self.task_rb_act, self.time_name_rb_act])
 
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.set_time_block)
@@ -1760,9 +1804,9 @@ class TimeBlockDialog(QDialog):
         v_box.addWidget(gap_label)
         v_box.addWidget(self.line_edit)
         v_box.addWidget(type_label)
-        v_box.addWidget(goal_rb)
-        v_box.addWidget(task_rb)
-        v_box.addWidget(time_rb)
+        v_box.addWidget(self.goal_rb)
+        v_box.addWidget(self.task_rb)
+        v_box.addWidget(self.time_rb)
         v_box.addWidget(ok_button)
         v_box.addWidget(self.task_settings_button)
         v_box.addStretch()
@@ -1770,20 +1814,22 @@ class TimeBlockDialog(QDialog):
         self.object_manager = ObjectManager(self, self.line_edit, ["Goals", "Skills", "Tasks"])
         self.object_manager.selected.connect(self.select_goal)
         self.object_manager.h = 140
-        goal_rb.setChecked(True)#default value
+        self.goal_rb.setChecked(True)#default value
         task = self.time_block.task_id.split(":")
         self.line_edit.blockSignals(True)
         if len(task) > 1:
-            if task[0] == "s": goal_rb.setChecked(True)
-            elif task[0] == "t": task_rb.setChecked(True)
-            else: time_rb.setChecked(True)
+            if task[0] == "s": self.goal_rb.setChecked(True)
+            elif task[0] == "t": 
+                self.task_rb.setChecked(True)
+                self.object_manager.isSelected = True
+            else: self.time_rb.setChecked(True)
             self.line_edit.setText(task[1])
             if task[0] == "s": task_type = "Skills"
             elif task[0] == "t": task_type = "Tasks"
             else: task_type = "Time name"
             self.select_goal(task[1], "", task_type)
         elif len(self.time_block.task_id.split(".")) > 1: 
-            goal_rb.setChecked(True)
+            self.goal_rb.setChecked(True)
             goal = DataManager.loadMainData("goal", task[0], one=True)
             self.line_edit.setText(goal[1])
             self.select_goal("", task[0], "Goals")
@@ -1792,6 +1838,7 @@ class TimeBlockDialog(QDialog):
 
     def tasks_settings(self):
         self.dialog = QDialog()
+        self.dialog.setWindowTitle("Task settings")
         self.dialog.setModal(True)
         self.dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.task_line_edit = QLineEdit()

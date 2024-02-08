@@ -86,10 +86,10 @@ def loadMainData(data_type, *args, one=False):
 
     if data_type == "recently completed goals":
         date = QDate.currentDate().addDays(-8).toString("yyyy-MM-dd")
-        cur.execute(f"SELECT name, files, time FROM Goals WHERE limit_date > '{date}' and state == 'completed'")
+        cur.execute(f"SELECT name, files, time, id FROM Goals WHERE limit_date > '{date}' and state == 'completed'")
 
     if data_type == "completing goals":
-        cur.execute(f"SELECT name, files, progress, time, custom_characteristics FROM Goals WHERE state == 'completing'")
+        cur.execute(f"SELECT name, files, progress, time, custom_characteristics, id FROM Goals WHERE state == 'completing'")
 
     if data_type == "author":
         cur.execute("SELECT author FROM Phrases WHERE phrase == ?", args)

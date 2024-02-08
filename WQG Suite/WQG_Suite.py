@@ -56,9 +56,9 @@ class MainWindow(QMainWindow):
         self.isGoalListNeedsToBeUpdated = False
         self.dialog = None
         self.dialog1 = None
-        #self.showAnimation()
         self.setUpMainWindow()
         self.showMaximized()
+        #self.showAnimation()
 
     def showAnimation(self):
         self.dialog = ws.AnimationDialog()
@@ -163,6 +163,8 @@ class MainWindow(QMainWindow):
         profile_info_box.top12_button.clicked.connect(self.top_12)
 
         self.completing_goals_widget = ws.CompletingGoalsWidget()
+        self.completing_goals_widget.recent_list_widget.itemClicked.connect(self.go_to_goal_from_dashboard)
+        self.completing_goals_widget.in_progress_widget.itemClicked.connect(self.go_to_goal_from_dashboard)
         today_phrase = ws.TodayPhraseWidget()
 
         left_v_box = QVBoxLayout()
@@ -184,6 +186,11 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(container)
         if len(sys.argv) > 1 and sys.argv[1] == "finish day":
             self.form()
+
+    def go_to_goal_from_dashboard(self, item):
+        goal_id = item.id
+        print(goal_id)
+        self.show_object("", goal_id, "Goals", close_dialog=False)
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
@@ -263,7 +270,7 @@ class MainWindow(QMainWindow):
         obj_manager.setStyleSheet("background-color: #000000")
         self.dialog.show()
 
-    def show_object(self, text, goal_id, obj_type):
+    def show_object(self, text, goal_id, obj_type, close_dialog=True):
         if obj_type == "Goals":
             tab = wstabs.GoalTab(goal_id.split(".")[0], goal_id=goal_id)
             tab.changesMade.connect(self.changesMade)
@@ -281,7 +288,8 @@ class MainWindow(QMainWindow):
             tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
 
         self.next_window(tab)
-        self.dialog.close()
+        if close_dialog:
+            self.dialog.close()
 
     def toggle_toolbar(self):
         if self.tool_bar.isVisible():

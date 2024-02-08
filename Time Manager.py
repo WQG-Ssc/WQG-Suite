@@ -1,18 +1,19 @@
 # -*- coding: cp1251 -*-
-import configparser, os, sys
-from win10toast import ToastNotifier
+import sys, configparser, os
+#from win10toast import ToastNotifier
 import sqlite3 as sql
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QWidget, QSizePolicy, QMessageBox, QDialog, QStackedWidget, QLineEdit, QCheckBox, QFileDialog, QGraphicsLineItem
-from PyQt6.QtGui import QAction, QFont, QIcon, QPen, QColor
-from PyQt6.QtCore import Qt, QTime, QTimer, QSize, QDate, QEvent
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QWidget, QSizePolicy, QMessageBox, QDialog, QStackedWidget, QLineEdit, QCheckBox, QFileDialog, QGraphicsLineItem
+from PySide6.QtGui import QAction, QFont, QIcon, QPen, QColor
+from PySide6.QtCore import Qt, QTime, QTimer, QSize, QDate, QEvent
 import WSwidgets as ws
 import DataManager, subprocess
 from style_sheet import style_sheet
 
-data_base = r"Files\data\main.db"
-config_path = r"Files\config\time_manager\config.ini"
+data_base = r"Files/data/main_test.db"
+config_path = r"Files/config/time_manager/config_test.ini"
 version = "0.1.1 public"
-app_icon_path = os.path.abspath(r"Files\icons\Time Manager icon.ico")
+app_icon_path = os.path.abspath(r"Files/icons/Time Manager icon.ico")
+
 
 style_sheet2 = """
 QPushButton#Round{
@@ -76,7 +77,6 @@ class MainWindow(QMainWindow):
         self.initializeUI()
 
     def load_data(self):
-        self.day_plan_widget = None
         self.isPaused = True
         self.isTimerEnabled = False
         self.isTimeouted = False
@@ -84,10 +84,9 @@ class MainWindow(QMainWindow):
         self.isRecordStarted = False
         self.dialog = None
         needs_restore = False
-        self.toaster = ToastNotifier()
+        #self.toaster = ToastNotifier()
         self.timer = QTimer()
         self.task_timer = QTimer()
-        self.task_timer.setSingleShot(True)
         self.task_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.task_timer.timeout.connect(self.task_time_expired)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -127,6 +126,7 @@ class MainWindow(QMainWindow):
             self.completed_tasks = [item.split(",") for item in tasks.split("|")]
         else:
             self.completed_tasks = []
+        print(f"ct:{self.completed_tasks}")
         self.timer_data = config.get("Timers", "Timer_1").split(",")
         self.main_timer_remaining_time = config.getint("Data", "Remaining_time")
         self.isRecurring = bool(self.timer_data[2])
@@ -155,14 +155,17 @@ class MainWindow(QMainWindow):
         #Timer for autosaving
         current_time = QTime().currentTime()
         current_time_str = current_time.toString()
+        print(current_time_str[-4:])
         self.autosave_timer = QTimer()
         self.autosave_timer.setTimerType(Qt.TimerType.PreciseTimer)
 
         if current_time_str[-4:] != "0:00":
             h, m, s = current_time_str.split(":")
+            print(1)
             self.first_turn = 600000 - (int(m[1]) * 60 + int(s)) * 1000 - 1010
             self.autosave_timer.setInterval(self.first_turn)
             self.autosave_timer.setSingleShot(True)
+            print(f"first_turn:{self.first_turn}")
         else:
             self.first_turn = 0
             self.autosave_timer.setInterval(598990)
@@ -170,6 +173,7 @@ class MainWindow(QMainWindow):
         self.autosave_timer.start()
 
     def autosave(self):
+        print("autosaving")
         if self.first_turn:
             self.first_turn = 0
             self.autosave_timer.stop()
@@ -224,7 +228,9 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.setFixedSize(450, 350)
         self.setWindowIcon(QIcon(app_icon_path))
+
         self.setUpMainWindow()
+        self.show()
 
     def setUpMainWindow(self):
         self.main_timer = QTimer()
@@ -240,14 +246,14 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton()
         self.stop_button.setObjectName("Round")
         self.stop_button.setFixedSize(56, 56)
-        self.stop_button.setIcon(QIcon(r"Files\Icons\stop.png"))
+        self.stop_button.setIcon(QIcon(r"Files/Icons/stop.png"))
         self.stop_button.setIconSize(QSize(56, 56))
         self.stop_button.clicked.connect(self.clear_timer)
         
         self.toggle_button = QPushButton()
         self.toggle_button.clicked.connect(self.toggle_record)
         self.toggle_button.setObjectName("Round")
-        self.toggle_button.setIcon(QIcon(r"Files\Icons\start.png"))
+        self.toggle_button.setIcon(QIcon(r"Files/Icons/start.png"))
         self.toggle_button.setFixedSize(56, 56)
         self.toggle_button.setIconSize(QSize(56, 56))
 
@@ -256,9 +262,9 @@ class MainWindow(QMainWindow):
         self.timers_button.clicked.connect(self.set_timers)
         self.timers_button.setObjectName("Icon")
         if self.isTimerEnabled:
-            self.timers_button.setIcon(QIcon(r"Files\Icons\hourglass_on.png"))
+            self.timers_button.setIcon(QIcon(r"Files/Icons/hourglass_on.png"))
         else:
-            self.timers_button.setIcon(QIcon(r"Files\Icons\hourglass_off.png"))
+            self.timers_button.setIcon(QIcon(r"Files/Icons/hourglass_off.png"))
 
         self.title_edit = QLineEdit()
         self.title_edit.setObjectName("Task")
@@ -266,30 +272,29 @@ class MainWindow(QMainWindow):
         self.title_edit.setPlaceholderText("Select a task")
 
         info_button = QPushButton()
-        info_button.setIcon(QIcon(r"Files\icons\info.png"))
+        info_button.setIcon(QIcon(r"Files/icons/info.png"))
         info_button.setIconSize(QSize(25, 25))
         info_button.setToolTip("Info")
         info_button.clicked.connect(self.show_info)
         info_button.setObjectName("Icon")
 
-        self.plan_button = QPushButton()
-        self.plan_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.plan_button.setCheckable(True)
-        self.plan_button.setIcon(QIcon(r"Files\icons\plan.png"))
-        self.plan_button.setIconSize(QSize(25, 25))
-        self.plan_button.setToolTip("Plan")
-        self.plan_button.toggled.connect(self.show_plan)
-        self.plan_button.setObjectName("Icon")
-       
+        plan_button = QPushButton()
+        plan_button.setCheckable(True)
+        plan_button.setIcon(QIcon(r"Files/icons/plan.png"))
+        plan_button.setIconSize(QSize(25, 25))
+        plan_button.setToolTip("Plan")
+        plan_button.toggled.connect(self.show_plan)
+        plan_button.setObjectName("Icon")
+
         sync_button = QPushButton()
         sync_button.clicked.connect(self.synchronize_plan)
-        sync_button.setIcon(QIcon(r"Files\icons\sync.png"))
+        sync_button.setIcon(QIcon(r"Files/icons/sync.png"))
         sync_button.setIconSize(QSize(25, 25))
         sync_button.setObjectName("Icon")
 
         phone_button = QPushButton()
-        phone_button.clicked.connect(self.continue_on_phone)
-        phone_button.setIcon(QIcon(r"Files\icons\to phone.png"))
+        phone_button.clicked.connect(self.continue_on_pc)
+        phone_button.setIcon(QIcon(r"Files/icons/to pc.png"))
         phone_button.setIconSize(QSize(25, 25))
         phone_button.setObjectName("Icon")
 
@@ -297,13 +302,17 @@ class MainWindow(QMainWindow):
         listen_button.clicked.connect(self.listen)
         listen_button.setMinimumWidth(50)
 
+        update_time_button = QPushButton("update time")
+        update_time_button.clicked.connect(self.update_after_closing_window)
+
         buttons_h_box = QHBoxLayout()
         buttons_h_box.addStretch()
+        buttons_h_box.addWidget(update_time_button)
         buttons_h_box.addWidget(listen_button)
         buttons_h_box.addWidget(sync_button)
         buttons_h_box.addWidget(phone_button)
         buttons_h_box.addWidget(info_button)
-        buttons_h_box.addWidget(self.plan_button)
+        buttons_h_box.addWidget(plan_button)
 
         h_box = QHBoxLayout()
         h_box.addStretch()
@@ -325,29 +334,19 @@ class MainWindow(QMainWindow):
         container.setLayout(main_v_box)
 
         self.day_plan_widget = QWidget()
-        self.day_plan_widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.day_plan_view = ws.WeekPlanView(QDate().currentDate(), week_view=False, inTimeManager=True)
+        self.day_plan_view.setStyleSheet("QScrollBar{width: 8px}")
         self.time_line = QGraphicsLineItem(0, 0, 256, 0)
         self.time_line.setPen(QPen(QColor("#FF0000")))
         self.time_line.setZValue(3)
         self.day_plan_view.scene.addItem(self.time_line)
         self.update_time_line(QTime.currentTime().toString("hh:mm:ss"))
         self.day_plan_view.startTask.connect(self.start_task)
-        self.day_plan_view.setFixedSize(256, 325)
-        complete_day_button = QPushButton("Finish day")
-        complete_day_button.setObjectName("YellowWhite")
-        complete_day_button.setFont(QFont('Calibri', 12, 700))
-        complete_day_button.clicked.connect(self.finish_day)
         save_plan_button = QPushButton("Save plan")
         save_plan_button.setObjectName("YellowWhite")
         save_plan_button.setFont(QFont('Calibri', 12, 700))
+        save_plan_button.setFixedHeight(25)
         save_plan_button.clicked.connect(self.save_plan)
-
-        self.open_plan_act = QAction()
-        self.open_plan_act.setShortcut("Ctrl+P")
-        self.open_plan_act.triggered.connect(self.open_plan_by_key)
-        self.addAction(self.open_plan_act)
-        self.day_plan_widget.addAction(self.open_plan_act)
 
         self.current_block = None
         if any(self.block_data) or self.completed_tasks:
@@ -357,6 +356,7 @@ class MainWindow(QMainWindow):
                     self.title_edit.setText(self.current_block.name)
                     self.expand_line_edit()
                 else:
+                    print(311)
                     for task in self.completed_tasks:
                         if task[0] == block.start_time and task[1] == block.end_time and task[2] == block.task_id:
                             block.setCompleted()
@@ -374,9 +374,31 @@ class MainWindow(QMainWindow):
         if not self.isRecordStarted:
             self.stop_button.setEnabled(False)
 
+        close_plan_button = QPushButton("Close plan")
+        close_plan_button.setObjectName("YellowWhite")
+        close_plan_button.setFont(QFont('Calibri', 12, 700))
+        close_plan_button.setFixedHeight(25)
+        close_plan_button.clicked.connect(lambda: self.show_plan(False))
+
+        delete_block_button = QPushButton()
+        delete_block_button.setObjectName("Icon")
+        delete_block_button.setFixedSize(25, 25)
+        delete_block_button.setIcon(QIcon(r"Files/icons/close.png"))
+        delete_block_button.setIconSize(QSize(25, 25))
+        delete_block_button.clicked.connect(self.delete_block)
+
+        copy_block_button = QPushButton()
+        copy_block_button.setObjectName("Icon")
+        copy_block_button.setIcon(QIcon(r"Files/icons/paste.png"))
+        copy_block_button.setIconSize(QSize(25, 25))
+        copy_block_button.setFixedSize(25, 25)
+        copy_block_button.clicked.connect(self.copy_block)
+
         plan_h_box = QHBoxLayout()
-        plan_h_box.addWidget(complete_day_button)
+        plan_h_box.addWidget(close_plan_button)
         plan_h_box.addWidget(save_plan_button)
+        plan_h_box.addWidget(copy_block_button)
+        plan_h_box.addWidget(delete_block_button)
         plan_h_box.setContentsMargins(0, 0, 0, 0)
 
         plan_v_box = QVBoxLayout()
@@ -384,16 +406,45 @@ class MainWindow(QMainWindow):
         plan_v_box.addLayout(plan_h_box)
         plan_v_box.setContentsMargins(0, 0, 0, 0)
         self.day_plan_widget.setLayout(plan_v_box)
-        self.stacked_widget.addWidget(container)
-        self.show()
-        self.title_edit.textChanged.connect(self.expand_line_edit)
-        self.expand_line_edit()
 
-    def open_plan_by_key(self):
-        if self.plan_button.isChecked():
-            self.plan_button.setChecked(False)
+        self.title_edit.textChanged.connect(self.expand_line_edit)
+
+        self.stacked_widget.addWidget(container)
+
+    def update_after_closing_window(self):
+        time = QTime.currentTime().toString("hh:mm:ss")
+        record_time = self.to_str(ws.calculate_msecs(time) - ws.calculate_msecs(self.interval_start_time))
+        self.record_time = QTime.fromString(record_time, "hh:mm:ss")
+        self.time_label.setText(record_time)
+
+    def delete_block(self):
+        for item in self.day_plan_view.scene.selectedItems():
+            self.day_plan_view.removeBlock(item)
+
+    def copy_block(self):
+        copied_blocks = []
+        for block in self.day_plan_view.scene.selectedItems():
+            item_copy = ws.TimeBlock(block.task_id, block.start_time, block.end_time, block.gap_time, block.day_index, self.day_plan_view.blocks_dict, [], False, inPlan=True)
+            item_copy.updateBlockRect()
+            self.day_plan_view.addBlock(item_copy)
+            copied_blocks.append(item_copy)
+        if copied_blocks:
+            self.day_plan_view.scene.clearSelection()
+            for block in copied_blocks:
+                block.setSelected(True)
+
+    def synchronize_plan(self):
+        success, data = DataManager.synchronizePlans()
+        if success:
+            QMessageBox.information(self, "Success", f"Success. Restart the application to see the changes")
         else:
-            self.plan_button.setChecked(True)
+            QMessageBox.information(self, "Failed to synchronize", "Failed to synchronize")
+
+    def continue_on_pc(self):
+        if not self.current_block:
+            DataManager.continue_on_pc(self.completed_tasks)
+        else:
+            QMessageBox.warning(self, "Warning","Finish current task to continue on the phone")
 
     def listen(self):
         data = DataManager.listen()
@@ -402,15 +453,6 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Success", "Success")
         else:
             QMessageBox.warning(self, "Failed to get data", "Failed to get data")
-
-    def synchronize_plan(self):
-        DataManager.synchronizePlans()
-
-    def continue_on_phone(self):
-        if not self.current_block:
-            DataManager.continue_on_phone(self.completed_tasks)
-        else:
-            QMessageBox.warning(self, "Warning", "Finish current task to continue on the phone")
 
     def update_time_line(self, time):
         self.time_line.prepareGeometryChange()
@@ -424,7 +466,7 @@ class MainWindow(QMainWindow):
                 DataManager.saveMainData("Plans", [item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
 
     def finish_day(self):
-        subprocess.Popen(["WQG's Suite.exe", "finish day"])
+        subprocess.Popen("WQG's Suite.exe", "finish day")
 
     def start_task(self, time_block):
         self.save_plan()
@@ -442,18 +484,11 @@ class MainWindow(QMainWindow):
 
     def show_plan(self, state):
         if state:
-            geometry = self.geometry()
-            self.day_plan_widget.setGeometry(geometry.right(), geometry.y(), 256, 350)
-            self.update_time_line(QTime().currentTime().toString("hh:mm:ss"))
-            self.day_plan_view.centerOn(self.time_line)
-            self.day_plan_widget.show()
+            self.stacked_widget.addWidget(self.day_plan_widget)
+            self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() + 1)
         else:
-            self.day_plan_widget.hide()
-                
-    def moveEvent(self, event):
-        if self.day_plan_widget.isVisible():
-            geometry = self.geometry()
-            self.day_plan_widget.setGeometry(geometry.right(), geometry.y(), 256, 350)
+            self.stacked_widget.removeWidget(self.day_plan_widget)
+            self.stacked_widget.setCurrentIndex(self.stacked_widget.currentIndex() - 1)
 
     def show_info(self):
         self.dialog = QDialog()
@@ -462,19 +497,19 @@ class MainWindow(QMainWindow):
         title = QLabel("Help")
         title.setFont(QFont('Segoe UI', 14))
         info = QLabel("""
-1.Records\n
-        1.1 To start a record press the 'start' button.\n
-        1.2.To pause the record press the same button again.\n
-        1.3 To finish the record press the 'finish' button.\n
-2. Timer\n
+1.Records/n
+        1.1 To start a record press the 'start' button./n
+        1.2.To pause the record press the same button again./n
+        1.3 To finish the record press the 'finish' button./n
+2. Timer/n
         2.1 To set a timer click on the 'set timer' button,
-        enter timer interval and click on 'toggle timer' checkbox.\n
-        2.2 Timer interval must be longer than 10 seconds.\n
-        2.3 Press 'recurring' button in 'set timer' window to make the timer recurring.\n
-        2.4 When you toggle the timer its remaining time resets to zero. (if exists).\n
-        2.5 Timer starts when you toggle the record on.\n
-        2.6 You can see the timer is on from the 'set timer' button - it will light yellow.\n
-        2.7 If turn on the timer when the recording is enabled, timer will be enabled after restarting the recording.\n""")
+        enter timer interval and click on 'toggle timer' checkbox./n
+        2.2 Timer interval must be longer than 10 seconds./n
+        2.3 Press 'recurring' button in 'set timer' window to make the timer recurring./n
+        2.4 When you toggle the timer its remaining time resets to zero. (if exists)./n
+        2.5 Timer starts when you toggle the record on./n
+        2.6 You can see the timer is on from the 'set timer' button - it will light yellow./n
+        2.7 If turn on the timer when the recording is enabled, timer will be enabled after restarting the recording./n""")
         info.setObjectName("Info")
         
         v_box = QVBoxLayout()
@@ -528,13 +563,13 @@ class MainWindow(QMainWindow):
             self.toggle_timer_button.setChecked(True)
             self.toggle_timer(self.toggle_timer_button, t_edit)
         else: 
-            self.toggle_timer_button.setIcon(QIcon(r"Files\icons\checkbox_off.png"))
+            self.toggle_timer_button.setIcon(QIcon(r"Files/icons/checkbox_off.png"))
 
         if self.isRecurring:
-            is_rec_button.setIcon(QIcon(r"Files\icons\recurring_on.png"))
+            is_rec_button.setIcon(QIcon(r"Files/icons/recurring_on.png"))
             is_rec_button.setChecked(True)
         else:
-            is_rec_button.setIcon(QIcon(r"Files\icons\recurring_off.png"))
+            is_rec_button.setIcon(QIcon(r"Files/icons/recurring_off.png"))
 
         t_edit.textChanged.connect(self.turn_off_timer_button)
 
@@ -602,12 +637,12 @@ class MainWindow(QMainWindow):
                     layers.pop(-1)
             self.isRecordStarted = True
             self.isPaused = False
-            self.toggle_button.setIcon(QIcon(r"Files\Icons\pause.png"))
+            self.toggle_button.setIcon(QIcon(r"Files/Icons/pause.png"))
             self.interval_start_time = QTime.currentTime().toString()
             self.main_timer.start()
             if self.isTimerEnabled:
                 if not self.isTimeouted:
-                    if self.timer_remaining_time: #Включить таймер
+                    if self.timer_remaining_time: #пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
                         self.timer.setInterval(self.timer_remaining_time)
                         self.timer_remaining_time = 0
                         self.timer.timeout.connect(self.set_normal)
@@ -622,7 +657,7 @@ class MainWindow(QMainWindow):
             self.toggle_restore(True)
         else:
             self.isPaused = True
-            self.toggle_button.setIcon(QIcon(r"Files\Icons\start.png"))
+            self.toggle_button.setIcon(QIcon(r"Files/Icons/start.png"))
             self.write_statistics()
             self.main_timer_remaining_time = self.main_timer.remainingTime()
             self.main_timer.stop()
@@ -630,7 +665,7 @@ class MainWindow(QMainWindow):
                 if self.isTimeouted:
                     self.timer_remaining_time = 0
                 else:
-                    self.timer_remaining_time = self.timer.remainingTime() + 1#Это будет отмечать что таймер включен
+                    self.timer_remaining_time = self.timer.remainingTime() + 1#пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
                     self.timer.stop()
             self.toggle_restore(False)
 
@@ -654,8 +689,8 @@ class MainWindow(QMainWindow):
                     if self.isRecurring:
                         self.isTimeouted = False
                     self.isTimerEnabled = True
-                    self.timers_button.setIcon(QIcon("Files\icons\hourglass_on.png"))
-                    button.setIcon(QIcon("Files\icons\checkbox_on.png"))
+                    self.timers_button.setIcon(QIcon("Files/icons/hourglass_on.png"))
+                    button.setIcon(QIcon("Files/icons/checkbox_on.png"))
                     self.timer_remaining_time = 0
                 else:
                     QMessageBox.warning(self, "Timer is too short", "Timer must be longer or equal to 10 seconds")
@@ -664,8 +699,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Invalid interval", "Invalid timer interval input")
         else: 
             self.isTimerEnabled = False
-            self.timers_button.setIcon(QIcon("Files\icons\hourglass_off.png"))
-            button.setIcon(QIcon("Files\icons\checkbox_off.png"))
+            self.timers_button.setIcon(QIcon("Files/icons/hourglass_off.png"))
+            button.setIcon(QIcon("Files/icons/checkbox_off.png"))
 
     def create_timer(self, interval):
         if self.timer_remaining_time:
@@ -700,10 +735,10 @@ class MainWindow(QMainWindow):
         if button.isChecked():
             self.isTimeouted = False
             self.isRecurring = True
-            button.setIcon(QIcon(r"Files\icons\recurring_on.png"))
+            button.setIcon(QIcon(r"Files/icons/recurring_on.png"))
         else:
             self.isRecurring = False
-            button.setIcon(QIcon(r"Files\icons\recurring_off.png"))
+            button.setIcon(QIcon(r"Files/icons/recurring_off.png"))
 
     def update_time(self):
         self.record_time = self.record_time.addSecs(1)
@@ -796,7 +831,7 @@ class MainWindow(QMainWindow):
         config.set("Data", "Record_time", self.record_time.toString())
         config.set("Data", "Completed_tasks", "|".join([",".join(item) for item in self.completed_tasks]))
 
-        if self.current_block and self.isRecordStarted:
+        if self.current_block:
             config.set("Data", "Time_block_data", f"{self.current_block.start_time},{self.current_block.end_time},{self.current_block.task_id}")
             config.set("Data", "Task_rtime", str(self.task_timer.remainingTime()))
         else:
@@ -811,28 +846,6 @@ class MainWindow(QMainWindow):
             config.write(config_file)
         self.day_plan_view.scene.blockSignals(True)
         self.day_plan_widget.close()
-
-    def stay_always_on_top_sys(self):
-        self.window_timer = QTimer()
-        self.window_timer.setSingleShot(True)
-        self.window_timer.setInterval(1)
-        self.window_timer.timeout.connect(self.show_normal)
-        self.window_timer.start()
-
-    def show_normal(self):
-        self.showNormal()
-
-    def event(self, event):
-        if self.day_plan_widget and self.plan_button.isChecked():
-            if event.type() == QEvent.Type.Hide:
-                self.day_plan_widget.hide()
-            elif event.type() == QEvent.Type.Show:
-                self.day_plan_widget.show()
-        if self.isPaused:
-            if event.type() == QEvent.Type.WindowStateChange and self.windowState() and Qt.WindowState.WindowMinimized:
-                self.stay_always_on_top_sys()
-                return True
-        return super().event(event)
             
 if __name__ == '__main__':
     app = QApplication(sys.argv)

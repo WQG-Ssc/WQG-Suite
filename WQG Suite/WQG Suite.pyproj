@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>e37b26b0-2b93-4147-83fd-373b172d4602</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>WQG_Suite.py</StartupFile>
+    <StartupFile>Time Manager.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
