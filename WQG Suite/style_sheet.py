@@ -133,4 +133,83 @@ QTimeEdit{
 QPlainTextEdit{
     color: white
     }
+
+QScrollBar:vertical {
+    border: 1px solid #FFD300;
+    background: black;
+    width: 8px;
+    margin: 0 0 0 0;
+}
+QScrollBar::handle:vertical {
+    background: #FFD300;
+    border: 1px solid black;
+    min-height: 5px;
+}
+QScrollBar::add-line:vertical {
+    height: 0px;
+}
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    border: 1px solid #FFD300;
+    background: black;
+    height: 8px;
+    margin: 0 0 0 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #FFD300;
+    border: 1px solid black;
+    min-width: 5px;
+}
+
+QScrollBar::add-line:horizontal {
+    width: 0px;
+}
+
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal {
+    width: 0px;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
 """
+#QScrollBar:horizontal{
+#    border: 1px solid #FFD300;
+#    background: black;
+#    height: 5px;
+#    margin: 0px 5px 0 5px;
+#}
+#QScrollBar::handle:horizontal {
+#    background: #FFD300;
+#    min-width: 20px;
+#}
+#QScrollBar::add-line:horizontal {
+#    border: 1px solid #FFD300;
+#    background: black;
+#    width: 20px;
+#    subcontrol-position: right;
+#    subcontrol-origin: margin;
+#}
+
+#QScrollBar::sub-line:horizontal {
+#    border: 1px solid #FFD300;
+#    background: black;
+#    width: 20px;
+#    subcontrol-position: left;
+#    subcontrol-origin: margin;
+#}

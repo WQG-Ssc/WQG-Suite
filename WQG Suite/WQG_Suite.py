@@ -1,8 +1,8 @@
 # -*- coding: cp1251 -*-
 import os, configparser, subprocess, DataManager, sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QFileDialog, QComboBox
-from PyQt6.QtCore import Qt, QSize, QTimer
-from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QToolBar, QDialog, QFileDialog, QComboBox, QTextEdit
+from PyQt6.QtCore import Qt, QSize, QTimer, QDate
+from PyQt6.QtGui import QIcon, QFont, QPixmap, QAction, QTextCharFormat, QTextCursor
 from style_sheet import style_sheet
 import WSwidgets as ws
 import WStabs as wstabs
@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
         config.set("User", "Name", self.user_name)
         config.set("User", "Image_path", self.user_image_path)
         config.set("User", "Diary_path", "")
-        config.set("Data", "FormFillingDate", "")
+        config.set("User", "Date_of_registration", QDate.currentDate().toString("yyyy-MM-dd"))
         config.set("Data", "last_showed_phrase", "")
         config.set("Data", "last_showed_phrase_date", "")
 
@@ -189,11 +189,11 @@ class MainWindow(QMainWindow):
 
     def go_to_goal_from_dashboard(self, item):
         goal_id = item.id
-        print(goal_id)
         self.show_object("", goal_id, "Goals", close_dialog=False)
 
     def profile_window(self):
         profile_tab = wstabs.ProfileTab(self.user_image_path, self.user_name)
+        profile_tab.top12_button.clicked.connect(self.top_12)
         self.next_window(profile_tab)
 
     def previous_window(self):
@@ -308,8 +308,8 @@ class MainWindow(QMainWindow):
         edit_phrases_button.clicked.connect(self.edit_phrases)
         edit_profile_button = QPushButton("Edit profile")
         edit_profile_button.clicked.connect(self.edit_profile)
-        about_button = QPushButton("About")
-        about_button.clicked.connect(self.show_about)
+        about_button = QPushButton("Changelog")
+        about_button.clicked.connect(self.show_changelog)
         v_box = QVBoxLayout()
         v_box.setSpacing(10)
         v_box.addWidget(stat_edit_button)
@@ -320,8 +320,66 @@ class MainWindow(QMainWindow):
         self.dialog.setLayout(v_box)
         self.dialog.show()
 
+    def show_changelog(self):
+        self.dialog1 = QDialog()
+        changelog_label = QLabel('<font face="Calibri" size="6" color="#FFD300">Changelog</font>')
+        changelog_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        changelog_text = QTextEdit("""
+            <p><font face="Calibri" size="5" color="#FFD300">25 December 2023 version: 1.0.2</font></p>
+            <font face="Calibri" size="3" color="#FFFFFF">
+                <p>Fixes:</p>
+                <ul>
+                    <li>1. Work time in schedule is counted for 'busy' time</li>
+                    <li>2. Fixed writing of busy value in time manager</li>
+                    <li>3. Fixed statistics writing in Form: gap time were missing</li>
+                    <li>4. If statistics are writed to a goal in Form, the state of the goal will become 'completing'</li>
+                    <li>5. Remove 'category' type of value of dynamic characteristics. Add ability to enter not only numeric values to static characts</li>
+                    <li>6. При выборе фразы в редакторе, дата должна вставлятся в редактор фраз</li>
+                    <li>7. If the quote ends with a space character, an error occurs</li>
+                </ul>
+                <p>Upgrades:</p>
+                <ul>
+                    <li>1. If the quote is too long, the font will become smaller</li>
+                    <li>2. Add rounding of skill values</li>
+                </ul>
+            </font>
+
+            <p><font face="Calibri" size="5" color="#FFD300">2024 version: 1.1</font></p>
+            <font face="Calibri" size="3" color="#FFFFFF">
+                <p>Fixes:</p>
+                <ul>
+                    <li>1. If a task is choose in time block dialog, it needs to be displayed in settings</li>
+                    <li>2. for some reason, time values in Form and in plans are different</li>
+                </ul>
+                <p>Upgrades:</p>
+                <ul>
+                    <li>1. Added rounding of time value in the Form </li>
+                    <li>2. Moved arrows for week swithcing before week name in Plans</li>
+                    <li>3. Added ability to add same graphs in Statistics</li>
+                    <li>4. Implemented 'Copy properties' function in Plans+</li>
+                    <li>5. Goals in the dashboard are clickable now+</li>
+                    <li>6. Added ability to view tasks statistics</li>
+                    <li>7. Added new actions for Time Blocks in Plans </li>
+                    <li>8. Improved the appearance of scroll bars</li>
+                    <li>9. Implemented sorting functionality in the skills tab</li>
+                    <li>10. Time Blocks with different 'busy' value have different colors now</li>
+                    <li>11. Modified some of the graphs type </li>
+
+                </ul>
+            </font>
+        """)
+        changelog_text.setReadOnly(True)
+        about_button = QPushButton("About the application")
+        about_button.clicked.connect(self.show_about)
+        v_box = QVBoxLayout()
+        v_box.addWidget(changelog_label)
+        v_box.addWidget(changelog_text)
+        v_box.addWidget(about_button)
+        self.dialog1.setLayout(v_box)
+        self.dialog1.show()
+
     def show_about(self):
-        QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.0.2</font></p>""")
+        QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.1</font></p>""")
 
     def edit_profile(self):
         self.dialog1 = QDialog()

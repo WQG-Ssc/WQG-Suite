@@ -1,7 +1,7 @@
 import configparser
 import sqlite3 as sql
 import WSwidgets as ws
-import re, socket
+import re, socket, datetime
 from PyQt6.QtCore import QDate
 main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
@@ -94,6 +94,12 @@ def loadMainData(data_type, *args, one=False):
     if data_type == "author":
         cur.execute("SELECT author FROM Phrases WHERE phrase == ?", args)
 
+    if data_type == "entered_days":
+        cur.execute(f"SELECT date FROM Days WHERE date >= '{args[0]}'")
+        
+    if data_type == "check_today":
+        cur.execute(f"SELECT date FROM Days WHERE date == '{args[0]}'")
+
     if one:
         data = cur.fetchone()
     else:
@@ -121,9 +127,6 @@ def saveMainData(data_type, args):
 
     if data_type == "Characteristics":
         cur.execute("INSERT INTO Characteristics (name, c_type, v_type) VALUES (?, ?, ?)", args)
-        
-    if data_type == "day":
-        cur.execute("INSERT INTO Days (date, 'Mental state', 'Physical state', 'Day rate', 'Work time') VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "day_data":
         cur.execute("SELECT date FROM Days WHERE date == ?", (args[4],))
@@ -133,7 +136,8 @@ def saveMainData(data_type, args):
             cur.execute("INSERT INTO Days ('Mental state', 'Physical state', 'Day rate', 'Work time', date) VALUES (?, ?, ?, ?, ?)", args)
 
     if data_type == "statistics":
-        cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", args)
+        for stat in args:
+            cur.execute("INSERT INTO Main_statistics (start_time, end_time, task_ID, date, busy) VALUES (?, ?, ?, ?, ?)", stat)
 
     if data_type == "task":
         cur.execute("SELECT name FROM Tasks WHERE name == ?", (args[2],))
@@ -144,7 +148,8 @@ def saveMainData(data_type, args):
             cur.execute("INSERT INTO Tasks (used_skills, busy, name) VALUES (?, ?, ?)", args)
 
     if data_type == "Plans":
-        cur.execute("INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES (?, ?, ?, ?, ?)", args)
+        for block in args:
+            cur.execute("INSERT INTO Plans (start_time, end_time, task_id, date, busy) VALUES (?, ?, ?, ?, ?)", block)
 
     conn.commit()
     conn.close()
@@ -319,7 +324,7 @@ def deleteOtherData(data_type, *args):
         cur.execute("DELETE FROM Top12 WHERE goal_id == ?", args)
     conn.commit()
     conn.close()
-
+    
 @exception_handler
 def updateOtherData(data_type, *args):
     conn = sql.connect(other_db)

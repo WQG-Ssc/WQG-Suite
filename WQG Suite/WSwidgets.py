@@ -2,7 +2,7 @@
 import os, math, random, configparser
 import DataManager
 from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QMessageBox, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QButtonGroup, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem, QRadioButton, QTimeEdit
-from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QImage, QRegularExpressionValidator
+from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QImage, QRegularExpressionValidator, QPolygonF
 from PyQt6.QtCore import QRectF, QRect, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer, pyqtProperty, QEasingCurve, QPropertyAnimation, QRegularExpression
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import tempfile
@@ -190,25 +190,21 @@ class CompletingGoalsWidget(QWidget):
         self.setFixedSize(330, 502)
         self.painter = QPainter()
         font24 = QFont("Calibri", 24, 700)
-        font16 = QFont("Calibri", 16, 700)
         recent_label = QLabel("Recently completed")
         recent_label.setFont(font24)
         self.recent_list_widget = QListWidget()
-        self.recent_list_widget.setFont(font16)
-        self.recent_list_widget.setIconSize(QSize(70, 70))
-        self.recent_list_widget.setStyleSheet("border: none")
-        self.recent_list_widget.setViewMode(QListWidget.ViewMode.IconMode)
+        self.in_progress_widget = QListWidget()
+
+        for widget in [self.recent_list_widget, self.in_progress_widget]:
+            widget.setIconSize(QSize(67, 67))
+            widget.setStyleSheet("border: none")
+            widget.setViewMode(QListWidget.ViewMode.IconMode)
+            widget.setLayoutMode(QListWidget.LayoutMode.SinglePass)
 
         in_progress_label = QLabel("In progress")
         in_progress_label.setFont(font24)
-        self.in_progress_widget = QListWidget()
-        self.in_progress_widget.setFont(font16)
-        self.in_progress_widget.setIconSize(QSize(67, 67))
-        self.in_progress_widget.setStyleSheet("border: none")
-        self.in_progress_widget.setViewMode(QListWidget.ViewMode.IconMode)
 
         self.load_data()
-
         v_box = QVBoxLayout()
         v_box.addWidget(recent_label)
         v_box.addWidget(self.recent_list_widget)
@@ -218,10 +214,21 @@ class CompletingGoalsWidget(QWidget):
         self.setLayout(v_box)
 
     def create_item(self, goal):
+        width = 86
+        size = 16
+        while width > 85 and size > 8:
+            font = QFont("Calibri", size, 700)
+            metrics = QFontMetrics(font)
+            width = metrics.horizontalAdvance(goal[0])
+            size -= 1
+
+        text = metrics.elidedText(goal[0], Qt.TextElideMode.ElideRight, 85)
+
         if len(goal) == 3:
-            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], 100, goal[2], 56)), goal[0])
+            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], 100, goal[2], 56)), text)
         else:
-            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), goal[0])
+            item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), text)
+        item.setFont(font)
         item.setTextAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
         item.setFlags(~Qt.ItemFlag.ItemIsSelectable)
         item.id = goal[-1]
@@ -377,7 +384,6 @@ def getGoalImage(image_path, goal_progress, d_diff, diameter=75):
     image = QPixmap(image_path).scaled(diameter, diameter, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
     size = image.size()
     if size.height() > diameter or size.width() > diameter:
-        print(size.width() // 2 - (diameter / 2))
         image = image.copy(size.width() // 2 - (diameter / 2), size.height() // 2 - (diameter / 2), diameter, diameter)
     mask = QBitmap(diameter, diameter)
     mask.fill(Qt.GlobalColor.color0)
@@ -838,10 +844,7 @@ class GraphItem(QWidget):
                     self.showing_charact_switcher.clicked.connect(self.switch_showing_charact)
                     self.sct_state = 1
                     h_box.addWidget(self.showing_charact_switcher)
-                self.value_type = "Numeric"
-
-            if self.graph_type == "Skills": 
-                self.value_type = "Numeric"
+            self.value_type = "Numeric"
             
             h_box.addWidget(remove_graph)
         h_box.setContentsMargins(10, 0, 0, 0)
@@ -861,7 +864,7 @@ class GraphItem(QWidget):
                 self.x, self.y = self.get_skill_vals()
 
             elif self.graph_type == "standard":
-                self.x, self.y = self.get_vals_for_h()
+                self.x, self.y = self.get_graph_vals()
                 color = DataManager.loadMainData("graph_color", self.name, one=True)[0]
             if self.value_mode == "All time":
                 counter = 0
@@ -964,15 +967,20 @@ class ObjectManager(QWidget):
     selected = pyqtSignal(str, str, str)
     def __init__(self, parent, line_edit, init_s_filter=["Goals", "Branches", "Skills"], searching=False):
         super().__init__()
-        self.s_filter = [item for item in init_s_filter]
+        self.select_act = QAction()
+        self.select_act.setShortcuts(["Return", "Enter"])
 
+        self.s_filter = [item for item in init_s_filter]
         self.load_data()
         self.searching = searching
         self.isSelected = False
         self.resized = False
         self.line_edit = line_edit
         self.line_edit.textChanged.connect(self.update_list)
+        self.line_edit.keyPressEvent = self.move_selection
         self.list_widget = QListWidget()
+        self.list_widget.addAction(self.select_act)
+        self.select_act.triggered.connect(self.fill_in_by_act)
         self.list_widget.itemClicked.connect(self.fill_in)
         self.setParent(parent)
         self.setVisible(False)
@@ -980,10 +988,13 @@ class ObjectManager(QWidget):
 
         goals_button = QPushButton()
         goals_button.setObjectName("Goals")
+        goals_button.setShortcut("Ctrl+G")
         branches_button = QPushButton()
         branches_button.setObjectName("Branches")
+        branches_button.setShortcut("Ctrl+B")
         skills_button = QPushButton()
         skills_button.setObjectName("Skills")
+        skills_button.setShortcut("Ctrl+S")
         characts_button = QPushButton()
         characts_button.setObjectName("Characteristics")
         graphs_button = QPushButton()
@@ -1007,14 +1018,24 @@ class ObjectManager(QWidget):
                     button.setIcon(QIcon(os.path.join(r'Files\icons', f"{button.objectName()}.png")))
                     button.setToolTip(button.objectName())
                     button.setCheckable(True)
-                    button.setChecked(True)
                     button.setStyleSheet("QPushButton{background-color: #000000; border: none} QPushButton::checked{background-color: #000000; border: 1px solid #FFD300}")
                     h_box.addWidget(button)
                     self.filters.addButton(button)
             self.filters.buttonToggled.connect(self.filter_search)
             v_box.addLayout(h_box)
 
+        self.s_filter = []
         self.setLayout(v_box)
+        
+    def move_selection(self, event):
+        if event.key() == 16777237 and not self.list_widget.currentItem() and self.list_widget.count():
+            self.list_widget.setCurrentRow(0)
+            self.list_widget.setFocus()
+        elif event.key() in (16777237, 16777235):
+            self.list_widget.keyPressEvent(event)
+            self.list_widget.setFocus()
+
+        return QLineEdit.keyPressEvent(self.line_edit, event)
 
     def fill_in(self, item):
         text = item.text()
@@ -1026,6 +1047,11 @@ class ObjectManager(QWidget):
         self.selected.emit(text, goal_id, obj_type)
         self.isSelected = True
         self.setVisible(False)
+        
+    def fill_in_by_act(self):
+        item = self.list_widget.currentItem()
+        if item:
+            self.fill_in(item)
 
     def update_list(self):
         self.isSelected = False
@@ -1039,7 +1065,7 @@ class ObjectManager(QWidget):
             self.list_widget.clear()
             
             for obj_type in self.data.keys():
-                if obj_type in self.s_filter:
+                if obj_type in self.s_filter or not self.s_filter:
                     for data in self.data[obj_type]:
                         if text.upper() in data.upper():
                             icon = QIcon(os.path.join(r'Files\icons', f"{obj_type}.png"))
@@ -1109,9 +1135,9 @@ class SkillCharactWidget(QWidget):
         self.delete_button.setFixedSize(20, 20)
         h_box = QHBoxLayout()
         h_box.addWidget(self.label)
+        h_box.addStretch()
         if data_type != "displaying charact":
             self.value_edit = QLineEdit(value)
-            self.value_edit.setFixedWidth(108)
             if data_type == "Skills" or data_type == "Characteristics" and DataManager.loadMainData("characteristic", text, one=True)[0] == "dynamic":
                 validator = QRegularExpressionValidator(QRegularExpression("[0-9][0-9]*\.?[0-9]+$"))
                 self.value_edit.setValidator(validator)
@@ -1120,6 +1146,7 @@ class SkillCharactWidget(QWidget):
             text = metrics.elidedText(self.name, Qt.TextElideMode.ElideRight, 85)
             self.label.setText(text)
             h_box.addWidget(self.delete_button)
+            h_box.addSpacing(18)
         self.setLayout(h_box)
 
     def setReadOnly(self):
@@ -1268,6 +1295,9 @@ class TimeBlock(QGraphicsItem):
         self.prev_x = 0
         self.prev_y = 0
         self.width = 258
+        self.button_brush = QBrush(QColor("#000000"))
+        self.selection_brush = QBrush(QColor(255, 0, 0, 0))
+        self.button_pen = QPen(QColor("#FFD300"))
         if used_table != "stats" or week == False:
             self.setFlags(QGraphicsItem.GraphicsItemFlag.ItemIsMovable | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable | QGraphicsItem.GraphicsItemFlag.ItemSendsScenePositionChanges)
         else:
@@ -1503,9 +1533,14 @@ class WeekPlanView(QGraphicsView):
         self.copy_act.setShortcut("Ctrl+C")
         self.copy_name_act = QAction("Copy name")
         self.copy_name_act.triggered.connect(self.copy_name)
+        self.copy_name_act.setShortcut("Ctrl+N")
         self.paste_name_act = QAction("Paste name")
         self.paste_name_act.triggered.connect(self.paste_name)
-        self.addActions([self.delete_act, self.copy_act, self.copy_name_act, self.paste_name_act])
+        self.paste_name_act.setShortcut("Ctrl+E")
+        self.select_all_act = QAction("Select all")
+        self.select_all_act.triggered.connect(self.select_all)
+        self.select_all_act.setShortcut("Ctrl+A")
+        self.addActions([self.delete_act, self.copy_act, self.copy_name_act, self.paste_name_act, self.select_all_act])
 
         if week_view:
             self.scene.setSceneRect(0, 0, 1920, 864)
@@ -1534,10 +1569,8 @@ class WeekPlanView(QGraphicsView):
                 if dtday < current_date:
                     used_table = "stats"
                 elif dtday == current_date:
-                    parser = configparser.ConfigParser()
-                    parser.read(r"Files\config\user.ini")
-                    lastCompletedDay = parser.get("Data", "formfillingdate")
-                    if lastCompletedDay == current_date.strftime("%Y-%m-%d"):
+                    today_completed = DataManager.loadMainData("check_today", current_date.strftime("%Y-%m-%d"))
+                    if today_completed:
                         used_table = "stats"
                     else:
                         used_table = "plans"
@@ -1666,14 +1699,13 @@ class WeekPlanView(QGraphicsView):
         if isinstance(item, TimeBlock):
             item.setSelected(True)
             self.menu = QMenu()
+            self.menu.addAction(self.copy_act)
+            self.menu.addAction(self.copy_name_act)
             if item.used_table != "stats" or not item.week:
+                if self.copied_task_id:
+                    self.menu.addAction(self.paste_name_act)
                 self.menu.addAction(self.delete_act)
-                self.menu.addAction(self.copy_act)
-                self.menu.addAction(self.copy_name_act)
-                self.menu.addAction(self.paste_name_act)
-            else:
-                self.menu.addAction(self.copy_act)
-                self.menu.addAction(self.copy_name_act)
+                self.menu.addAction(self.select_all_act)
             
             self.menu.exec(self.mapToGlobal(pos))
         return super().contextMenuEvent(event)
@@ -1715,6 +1747,12 @@ class WeekPlanView(QGraphicsView):
     def paste_name(self):
         item = self.scene.selectedItems()
         if item and self.copied_task_id: item[0].updateTaskID(self.copied_task_id)
+
+    def select_all(self):
+        for day_blocks in self.blocks_dict.values():
+            for block in day_blocks:
+                if block.used_table != "stats":
+                    block.setSelected(True)
             
     def highlight_items(self):
         selected_items = self.scene.selectedItems()
@@ -1726,7 +1764,7 @@ class WeekPlanView(QGraphicsView):
                 else:
                     item.dehighlight()
 
-    def changeWeek(self, new_start_day, exceptItems):
+    def changeWeek(self, new_start_day, exceptItems=[]):
         self.start_day = new_start_day
         for item in self.scene.items():
             if item not in exceptItems and isinstance(item, TimeBlock):
@@ -1742,7 +1780,7 @@ class WeekPlanView(QGraphicsView):
 
     def changes_made(self):
         self.changesMade.emit()
-
+               
 class TimeBlockDialog(QDialog):
     def __init__(self, time_block):
         super().__init__()

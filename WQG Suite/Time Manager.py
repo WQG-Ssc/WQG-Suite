@@ -418,10 +418,12 @@ class MainWindow(QMainWindow):
 
     def save_plan(self):
         DataManager.deleteMainData("Plans", self.current_date_str)
+        block_list = []
         for item in self.day_plan_view.blocks_dict[0]:
             if item.task_id:
                 busy = ws.getBusyValue(item.task_id)
-                DataManager.saveMainData("Plans", [item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
+                block_list.append([item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
+        DataManager.saveMainData("Plans", block_list)
 
     def finish_day(self):
         subprocess.Popen(["WQG's Suite.exe", "finish day"])
