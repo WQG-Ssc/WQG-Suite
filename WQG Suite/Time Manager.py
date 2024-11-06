@@ -417,13 +417,17 @@ class MainWindow(QMainWindow):
         self.time_line.setPos(0, ws.calculate_msecs(time) * 0.00001)
 
     def save_plan(self):
-        DataManager.deleteMainData("Plans", self.current_date_str)
-        block_list = []
-        for item in self.day_plan_view.blocks_dict[0]:
-            if item.task_id:
-                busy = ws.getBusyValue(item.task_id)
-                block_list.append([item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
-        DataManager.saveMainData("Plans", block_list)
+        colliding_blocks = self.day_plan_view.check_blocks()
+        if colliding_blocks:
+            QMessageBox.warning(self, "Time blocks are colliding", f"The following blocks are colliding: {', '.join([block.name for block in colliding_blocks])}")
+        else:
+            DataManager.deleteMainData("Plans", self.current_date_str)
+            block_list = []
+            for item in self.day_plan_view.blocks_dict[0]:
+                if item.task_id:
+                    busy = ws.getBusyValue(item.task_id)
+                    block_list.append([item.start_time, item.end_time, item.task_id, self.current_date_str, busy])
+            DataManager.saveMainData("Plans", block_list)
 
     def finish_day(self):
         subprocess.Popen(["WQG's Suite.exe", "finish day"])
@@ -431,13 +435,17 @@ class MainWindow(QMainWindow):
     def start_task(self, time_block):
         self.save_plan()
         if time_block.name and time_block != self.current_block and self.isPaused:
-            if self.current_block:
-                self.clear_timer()
-            self.current_block = time_block
-            self.title_edit.setText(time_block.name)
-            self.time_label.setText("00:00:00")
-            self.task_timer.setInterval(ws.calculate_msecs(time_block.end_time) - ws.calculate_msecs(time_block.start_time))
-            self.task_timer.start()
+            print(DataManager.getGoalTree(time_block.task_id))
+            if len(DataManager.getGoalTree(time_block.task_id)) < 2:
+                if self.current_block:
+                    self.clear_timer()
+                self.current_block = time_block
+                self.title_edit.setText(time_block.name)
+                self.time_label.setText("00:00:00")
+                self.task_timer.setInterval(ws.calculate_msecs(time_block.end_time) - ws.calculate_msecs(time_block.start_time))
+                self.task_timer.start()
+            else:
+                QMessageBox.warning(self, 'Selected task is a group', 'Selected task is a group. Select an subgoal.')
 
     def task_time_expired(self):
         self.toaster.show_toast(f"Time expired", f"Time of {self.title_edit.text()} task expired.", duration=8, threaded=True, icon_path=app_icon_path)
@@ -632,7 +640,7 @@ class MainWindow(QMainWindow):
                 if self.isTimeouted:
                     self.timer_remaining_time = 0
                 else:
-                    self.timer_remaining_time = self.timer.remainingTime() + 1#Это будет отмечать что таймер включен
+                    self.timer_remaining_time = self.timer.remainingTime() + 1#Это будет отмечать, что таймер включен
                     self.timer.stop()
             self.toggle_restore(False)
 

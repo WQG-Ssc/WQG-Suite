@@ -103,6 +103,7 @@ class ProfileInfoBox(QWidget):
     clicked = pyqtSignal()
     def __init__(self, image, name, gotoProfile=True):
         super().__init__()
+        self.name = name
         self.setFixedSize(330, 157)
         self.gotoProfile = gotoProfile
         self.painter = QPainter()
@@ -119,7 +120,7 @@ class ProfileInfoBox(QWidget):
             image = image.copy(image_size.width() // 2 - height / 2, image_size.height() // 2 - height / 2, size.width(), height)
         self.profile_image.setPixmap(shapeImage(size, image))
 
-        self.user_name = QLabel(name)
+        self.user_name = QLabel(self.name)
         self.user_name.setFont(QFont('Calibri', 24))
 
         diary_button = QPushButton()
@@ -224,7 +225,7 @@ class CompletingGoalsWidget(QWidget):
 
         text = metrics.elidedText(goal[0], Qt.TextElideMode.ElideRight, 85)
 
-        if len(goal) == 3:
+        if len(goal) == 4:
             item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], 100, goal[2], 56)), text)
         else:
             item = QListWidgetItem(QIcon(getGoalImage(goal[1].split(",")[0], calculate_progress(goal[2], goal[3], goal[4], "completing"), goal[3], 56)), text)
@@ -298,6 +299,8 @@ class TodayPhraseWidget(QWidget):
         parser.read(user_config_file)
         if parser.get("Data", "last_showed_phrase_date") == current_date:
             phrase_name = parser.get("Data", "last_showed_phrase")
+            print(f'phrase_name:{phrase_name}')
+            print(DataManager.loadOtherData("phrase author", phrase_name, one=True))
             author = DataManager.loadOtherData("phrase author", phrase_name, one=True)[0]
             
             image = DataManager.loadOtherData("author", author, one=True)
@@ -798,7 +801,7 @@ class PlotlyViewer(QWebEngineView):
         pass
 
 class GraphItem(QWidget):
-    toggled = pyqtSignal(str, str, list, list, int, str)
+    toggled = pyqtSignal(QWidget, int, str)
     removed = pyqtSignal(QWidget)
     def __init__(self, name, graph_type, goal_id, value_type):
         super().__init__()
@@ -853,7 +856,7 @@ class GraphItem(QWidget):
     def graph_toggled(self, state):
         color = ""
         if state == 1:
-            self.toggled.emit(self.name, "", [], [], state, color)
+            self.toggled.emit(self, state, color)
         else:
             if self.graph_type == "Goals" or self.graph_type == "Tasks":
                 if self.showing_charact == "h":
@@ -874,7 +877,7 @@ class GraphItem(QWidget):
                     y.append(counter)
                 self.y = [item for item in y]
 
-            self.toggled.emit(self.name, self.value_type, self.x, self.y, state, color)
+            self.toggled.emit(self, state, color)
 
     def get_graph_vals(self):
         x = []
@@ -985,6 +988,8 @@ class ObjectManager(QWidget):
         self.setParent(parent)
         self.setVisible(False)
         self.h = 200
+        
+        goals_filter = QCheckBox()
 
         goals_button = QPushButton()
         goals_button.setObjectName("Goals")
@@ -1070,10 +1075,17 @@ class ObjectManager(QWidget):
                         if text.upper() in data.upper():
                             icon = QIcon(os.path.join(r'Files\icons', f"{obj_type}.png"))
                             item = ListWidgetItem(icon, data)
-                            item.obj_type = obj_type
+
                             if obj_type == "Goals":
-                                item.goal_id = self.goals_ids[self.data[obj_type].index(data)]
+                                goal_id = self.goals_ids[self.data[obj_type].index(data)]
+                                item.goal_id = goal_id
+                                print()
+                                if DataManager.isSubgoal:
+                                    parent_goal_id = ".".join(goal_id.split(".")[:2])
+                                    parent_goal_data = DataManager.loadMainData("goal", parent_goal_id, one=True)
+                                    item.setText(data + " " + f'(∈{parent_goal_data[1]})')
                             
+                            item.obj_type = obj_type
                             self.list_widget.addItem(item)
                             areResults = True
                 if areResults:
@@ -1168,35 +1180,41 @@ class CompleteGoalWindow(QWidget):
 
         if self.goal_data[7] != "completing":
             if QMessageBox.question(self, "Goal haven't been started yet", "Goal haven't been started yet. Are you try to enter already finished goal?") == QMessageBox.StandardButton.Yes:
-                pass
+                self.goal_data[7] = "completed"
+                self.goal_data[4] = QDate().currentDate().toString("yyyy-MM-dd")
+                self.goal_data.append(self.goal_data[0])
+                self.show_completition_dialog()
         else:
             self.recalc_goal_values_for_comp()
-            goal_image = QLabel()
-            goal_image.setPixmap(getGoalImage(self.goal_data[9].split(",")[0], 100, float(self.goal_data[2]), 138))
-            goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            self.show_completition_dialog()
+            
+    def show_completition_dialog(self):
+        goal_image = QLabel()
+        goal_image.setPixmap(getGoalImage(self.goal_data[9].split(",")[0], 100, float(self.goal_data[2]), 138))
+        goal_image.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-            name_label = QLabel(self.goal_data[1])
-            name_label.setFont(QFont("Calibri", 24, 700))
-            name_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        name_label = QLabel(self.goal_data[1])
+        name_label.setFont(QFont("Calibri", 24, 700))
+        name_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-            time_label = QLabel(f"Time: {self.goal_data[2]:2f} hours")
-            time_label.setFont(QFont("Calibri", 24, 700))
-            time_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        time_label = QLabel(f"Time: {self.goal_data[2]:2f} hours")
+        time_label.setFont(QFont("Calibri", 24, 700))
+        time_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-            ok_button = QPushButton()
-            ok_button.setIcon(QIcon(f"Files\icons\complete goal.png"))
-            ok_button.clicked.connect(self.complete_goal)
-            ok_button.setFixedWidth(150)
+        ok_button = QPushButton()
+        ok_button.setIcon(QIcon(f"Files\icons\complete goal.png"))
+        ok_button.clicked.connect(self.complete_goal)
+        ok_button.setFixedWidth(150)
 
-            v_box = QVBoxLayout()
-            v_box.addSpacing(345)
-            v_box.addWidget(goal_image, alignment=Qt.AlignmentFlag.AlignHCenter)
-            v_box.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-            v_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-            v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
-            v_box.addStretch()
-            self.setLayout(v_box)
-            self.show()
+        v_box = QVBoxLayout()
+        v_box.addSpacing(345)
+        v_box.addWidget(goal_image, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_box.addStretch()
+        self.setLayout(v_box)
+        self.show()
 
     def recalc_goal_values_for_comp(self, goal_id=""):
         if goal_id:
@@ -1239,10 +1257,14 @@ class CompleteGoalWindow(QWidget):
         skills_str = ""
         for skill in used_skills.split(","):
             name, value = skill.split(":")
-            skill_time = time * (float(value) / old_time)
-            skills_str += f"{name}:{skill_time},"
+            if old_time == 0:
+                skill_time = 0
+            else:
+                skill_time = time * (float(value) / old_time)
+                skills_str += f"{name}:{skill_time},"
         skills_str = skills_str.rstrip(",")
 
+        goal_data[4] = QDate().currentDate().toString("yyyy-MM-dd")
         goal_data[6] = skills_str
         goal_data[2] = time
         goal_data[7] = "completed"
@@ -1334,6 +1356,7 @@ class TimeBlock(QGraphicsItem):
                 self.name = self.task_id + " " + DataManager.loadMainData("goal", self.task_id, one=True)[1]
         else:
             self.name = ""
+        self.update()
         self.object.changes_made.emit()
 
     def boundingRect(self):
@@ -1524,6 +1547,11 @@ class WeekPlanView(QGraphicsView):
         self.blocks_dict = {}
         self.max_end_time = 86400000
         self.copied_task_id = ""
+        
+        self.act = QAction()
+        self.act.triggered.connect(self.check_blocks)
+        self.act.setShortcut("Ctrl+M")
+        self.addAction(self.act)
 
         self.delete_act = QAction("Delete block")
         self.delete_act.triggered.connect(self.delete_block)
@@ -1697,6 +1725,9 @@ class WeekPlanView(QGraphicsView):
         pos = event.pos()
         item = self.itemAt(pos)
         if isinstance(item, TimeBlock):
+            if len(self.scene.selectedItems()) == 1:
+                print(1)
+                self.scene.clearSelection()
             item.setSelected(True)
             self.menu = QMenu()
             self.menu.addAction(self.copy_act)
@@ -1713,7 +1744,7 @@ class WeekPlanView(QGraphicsView):
     def mouseDoubleClickEvent(self, event):
         if isinstance(self.itemAt(event.pos()), TimeBlock):
             item = self.scene.selectedItems()
-            if len(item) == 1 and (item[0].used_table != "stats" or not self.week_view):
+            if len(item) == 1:
                 item = item[0]
                 self.scene.clearSelection()
                 self.dialog = TimeBlockDialog(item)
@@ -1746,13 +1777,13 @@ class WeekPlanView(QGraphicsView):
 
     def paste_name(self):
         item = self.scene.selectedItems()
-        if item and self.copied_task_id: item[0].updateTaskID(self.copied_task_id)
+        if item and self.copied_task_id:
+            item[0].updateTaskID(self.copied_task_id)
 
     def select_all(self):
         for day_blocks in self.blocks_dict.values():
             for block in day_blocks:
-                if block.used_table != "stats":
-                    block.setSelected(True)
+                block.setSelected(True)
             
     def highlight_items(self):
         selected_items = self.scene.selectedItems()
@@ -1777,6 +1808,15 @@ class WeekPlanView(QGraphicsView):
             items = self.scene.selectedItems()
             self.switch_week_req.emit(mode, items)
             self.changesMade.emit()
+            
+    def check_blocks(self): #Checks if blocks are colliding
+        colliding_items = []
+        # for day_blocks in self.blocks_dict.values():
+        #     for block in day_blocks:
+        #         for item in block.collidingItems():
+        #             if isinstance(item, TimeBlock):
+        #                 colliding_items.append(item)
+        return colliding_items
 
     def changes_made(self):
         self.changesMade.emit()
@@ -1875,9 +1915,8 @@ class TimeBlockDialog(QDialog):
         self.show()
 
     def tasks_settings(self):
-        self.dialog = QDialog()
+        self.dialog = ModalIconDialog()
         self.dialog.setWindowTitle("Task settings")
-        self.dialog.setModal(True)
         self.dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.task_line_edit = QLineEdit()
         self.task_line_edit.setPlaceholderText("Enter task name")
@@ -1918,22 +1957,26 @@ class TimeBlockDialog(QDialog):
 
     def save_task_settings(self):
         used_skills = ""
-        if self.task_line_edit.text():
-            if self.busy_checkbox.isChecked():
-                for i in range(self.skills_list.count()):
-                    widget = self.skills_list.itemWidget(self.skills_list.item(i))
-                    skill = widget.name
-                    value = widget.value_edit.text()
-                    if not value:
-                        return QMessageBox.warning(self, "Fill all values of skills", "Fill all values of skills")
-                    used_skills += skill + ":" + value + ","
+        task_name = self.task_line_edit.text()
+        if task_name:
+            if "." not in task_name:
+                if self.busy_checkbox.isChecked():
+                    for i in range(self.skills_list.count()):
+                        widget = self.skills_list.itemWidget(self.skills_list.item(i))
+                        skill = widget.name
+                        value = widget.value_edit.text()
+                        if not value:
+                            return QMessageBox.warning(self, "Fill all values of skills", "Fill all values of skills")
+                        used_skills += skill + ":" + value + ","
                     used_skills = used_skills.rstrip(",")
-                if not used_skills:
-                    return QMessageBox.warning(self, "Empty skill list", "Tasks marked as 'busy' must have defined used skills")
-            busy = int(self.busy_checkbox.isChecked())
-            DataManager.saveMainData("task", [used_skills, busy, self.task_line_edit.text()])
-            self.line_edit.setText(self.task_line_edit.text())
-            self.object_manager.isSelected = True
+                    if not used_skills:
+                        return QMessageBox.warning(self, "Empty skill list", "Tasks marked as 'busy' must have defined used skills")
+                busy = int(self.busy_checkbox.isChecked())
+                DataManager.saveMainData("task", [used_skills, busy, task_name])
+                self.line_edit.setText(task_name)
+                self.object_manager.isSelected = True
+            else:
+                QMessageBox.warning(self, 'Invalid name', 'Task names cannot have a dot sign in their names')
         self.dialog.close()
 
     def update_time(self):
@@ -2009,6 +2052,12 @@ class TimeBlockDialog(QDialog):
                 self.time_block.prepareGeometryChange()
                 self.time_block.updateTime()
         self.close()
+        
+class ModalIconDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowIcon(QIcon(r"Files\Small icon.png"))
+        self.setModal(True)
 
 def getGoalColor(d_diff):
     previous_key = -1

@@ -1,8 +1,8 @@
 import statistics as stats
 import datetime as dt
 from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
-from PyQt6.QtCore import Qt, QSize, QRegularExpression, pyqtSignal, QDate
-from PyQt6.QtGui import QIcon, QFont, QAction, QRegularExpressionValidator, QFontMetrics, QPixmap
+from PyQt6.QtCore import Qt, QSize, QRegularExpression, pyqtSignal, QDate, QTime
+from PyQt6.QtGui import QIcon, QFont, QAction, QMouseEvent, QRegularExpressionValidator, QFontMetrics, QPixmap
 import plotly.graph_objs as go
 import WSwidgets as ws
 import WSobjects as wsobj
@@ -32,7 +32,6 @@ class ProfileTab(QWidget):
         skills_label.setFont(QFont("Calibri", 30, 700))
 
         self.skills_tree_widget = QTreeWidget()
-        self.skills_tree_widget
         self.skills_tree_widget.setColumnCount(2)
         self.skills_tree_widget.setSortingEnabled(True)
         self.skills_tree_widget.setHeaderLabels(["Skill", "Hours"])
@@ -209,8 +208,7 @@ class GoalsTab(QWidget):
         self.setLayout(h_box)
 
     def characts_displaying_settings(self):
-        self.dialog = QDialog()
-        self.dialog.setModal(True)
+        self.dialog = ws.ModalIconDialog()
         self.dialog.setFixedWidth(280)
         self.displaying_characts = []
         self.save_sections_act = QAction()
@@ -601,9 +599,8 @@ class GoalTab(QWidget):
             self.dialog.show()
 
     def charact_settings(self, line_edit, object_manager):
-        self.dialog1 = QDialog()
+        self.dialog1 = ws.ModalIconDialog()
         self.dialog1.setWindowTitle("Characteristic settings")
-        self.dialog1.setModal(True)
         charact_name = ""
         charact_edit = QLineEdit()
         charact_edit.setPlaceholderText("Enter characteristic name")
@@ -726,7 +723,7 @@ class GoalTab(QWidget):
         self.setSaveEnabled()
 
     def goal_settings(self):
-        self.dialog = QDialog()
+        self.dialog = ws.ModalIconDialog()
         self.dialog.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.dialog.setModal(True)
 
@@ -1019,7 +1016,6 @@ class StatisticsTab(QWidget):
     def __init__(self):
         super().__init__()
         self.traces = []
-        self.graphs = {"Goals":[], "Skills":[], "Tasks":[], "standard":[]}
         self.standard_colors = {}
         self.from_date = ""
         self.to_date = ""
@@ -1177,35 +1173,33 @@ class StatisticsTab(QWidget):
         item.setFont(2, QFont("Segoe UI", 10))
         self.graph_tree_widget.addTopLevelItem(item)
 
-    def display_graph(self, graph_name, value_type, x, y, state, color):
+    def display_graph(self, graph_item, state, color):
         if state == 2:
-            if value_type == "Numeric":
+            if graph_item.value_type == "Numeric":
                 yaxis = "y"
-            elif value_type == "Letteric":
+            elif graph_item.value_type == "Letteric":
                 yaxis = "y2"
-            elif value_type == "%":
+            elif graph_item.value_type == "%":
                 yaxis = "y3"
 
             if color:
-                self.fig.add_trace(go.Scatter(x=x, y=y, name=graph_name, yaxis=yaxis, line=dict(color=color)))
+                self.fig.add_trace(go.Scatter(x=graph_item.x, y=graph_item.y, name=graph_item.name, yaxis=yaxis, line=dict(color=color)))
+            elif graph_item.value_mode == "All time":
+                self.fig.add_trace(go.Scatter(x=graph_item.x, y=graph_item.y, name=graph_item.name, yaxis=yaxis))
             else:
-                self.fig.add_trace(go.Bar(x=x, y=y, name=graph_name, yaxis=yaxis))
-            self.traces.append(graph_name)
+                self.fig.add_trace(go.Bar(x=graph_item.x, y=graph_item.y, name=graph_item.name, yaxis=yaxis))
+            self.traces.append(graph_item.name)
             self.stats_view.set_figure(self.fig)
         else:
             data = list(self.fig.data)
-            data.pop(self.traces.index(graph_name))
+            data.pop(self.traces.index(graph_item.name))
             self.fig.data = data
-            self.traces.remove(graph_name)
+            self.traces.remove(graph_item.name)
             self.stats_view.set_figure(self.fig)
 
     def add_graph(self, name, goal_id, obj_type, value_type=None):
         if not value_type:
             self.line_edit.clear()
-        if obj_type == "Goals":
-            self.graphs[obj_type].append(goal_id)
-        else:
-            self.graphs[obj_type].append(name)
         widget = ws.GraphItem(name, obj_type, goal_id, value_type)
         widget.toggled.connect(self.display_graph)
         widget.removed.connect(self.remove_graph)
@@ -1221,10 +1215,6 @@ class StatisticsTab(QWidget):
             widget = self.graphs_list_widget.itemWidget(item)
             if widget.name == graph_widget.name and widget.graph_type == graph_widget.graph_type:
                 self.graphs_list_widget.takeItem(i)
-                if graph_widget.graph_type == "Goals":
-                    self.graphs[widget.graph_type].remove(graph_widget.goal_id)
-                else:
-                    self.graphs[widget.graph_type].remove(graph_widget.name)
                 if widget.show_checkbox.isChecked():
                     self.display_graph(graph_widget.name, None, None, None, 1, None)
                 break
@@ -1236,9 +1226,6 @@ class Form(QDialog):
         self.day_time = 0
         self.parser = configparser.ConfigParser()
         self.parser.read(r"Files\config\user.ini")
-        
-        self.dialog = QDialog()
-        self.dialog.setWindowTitle("Forgotten day reports")
 
         self.find_days()
 
@@ -1323,6 +1310,8 @@ class Form(QDialog):
             obj.clear()
             
         self.change_list_widget.clear()
+        self.goals_with_dccs.clear()
+        self.goal_ccs_dict.clear()
         self.day_note.clear()
         self.day_plan_view.changeWeek(QDate.fromString(self.current_date, "yyyy-MM-dd"))
         self.check_plan()
@@ -1396,109 +1385,114 @@ class Form(QDialog):
                 self.goals_with_dccs.append(task)
 
     def save_day_data(self):
-        day_stats = [item.text() for item in self.day_stats_edits if item.text() != ""]
+        colliding_blocks = self.day_plan_view.check_blocks()
+        if colliding_blocks:
+            QMessageBox.warning(self, "Time blocks are colliding", f"The following blocks are colliding: {', '.join([block.name for block in colliding_blocks])}")
+        else:
+            day_stats = [item.text() for item in self.day_stats_edits if item.text() != ""]
 
-        if len(day_stats) == 3:
-            DataManager.deleteMainData("stats", self.current_date)
-            DataManager.deleteMainData("plans", self.current_date)
-            self.records_dict = {}
-            blocks_list = []
-            for item in self.day_plan_view.blocks_dict[0]:
-                if item.task_id in self.records_dict:
-                    self.records_dict[item.task_id] += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
-                else:
-                    self.records_dict[item.task_id] = ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
-                busy = ws.getBusyValue(item.task_id)
-                blocks_list.append([item.start_time, item.end_time, item.task_id, self.current_date, busy])
-            DataManager.saveMainData("statistics", blocks_list)
+            if len(day_stats) == 3:
+                DataManager.deleteMainData("stats", self.current_date)
+                DataManager.deleteMainData("plans", self.current_date)
+                self.records_dict = {}
+                blocks_list = []
+                for item in self.day_plan_view.blocks_dict[0]:
+                    if item.task_id in self.records_dict:
+                        self.records_dict[item.task_id] += ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                    else:
+                        self.records_dict[item.task_id] = ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                    busy = ws.getBusyValue(item.task_id)
+                    blocks_list.append([item.start_time, item.end_time, item.task_id, self.current_date, busy])
+                DataManager.saveMainData("statistics", blocks_list)
 
-            DataManager.saveMainData("day_data", day_stats + [self.day_time, self.current_date])
-            for goal_id in self.records_dict.keys():
-                if len(goal_id.split(".")) > 1:
-                    needs_calc = False
-                    cc_stats_str = ""
-                    goal_data = list(DataManager.loadMainData("goal", goal_id, one=True))
+                DataManager.saveMainData("day_data", day_stats + [self.day_time, self.current_date])
+                for goal_id in self.records_dict.keys():
+                    if len(goal_id.split(".")) > 1:
+                        needs_calc = False
+                        cc_stats_str = ""
+                        goal_data = list(DataManager.loadMainData("goal", goal_id, one=True))
 
-                    value, p_charact = goal_data[10].split(":")
-                    goal_cc_stats = goal_data[12]
-                    value = float(value)
+                        value, p_charact = goal_data[10].split(":")
+                        goal_cc_stats = goal_data[12]
+                        value = float(value)
 
-                    if p_charact == "Hours":
-                        value += self.records_dict[goal_id] / 3600000
+                        if p_charact == "Hours":
+                            value += self.records_dict[goal_id] / 3600000
 
-                    if goal_id in self.line_edit_dict:
-                        for edit in self.line_edit_dict[goal_id]:
-                            if edit.text():
-                                needs_calc = True
+                        #Collecting dccs changes (dccs - dynamic custom characteristics)
+                        if goal_id in self.line_edit_dict:
+                            for edit in self.line_edit_dict[goal_id]:
+                                if edit.text():
+                                    needs_calc = True
 
-                        if needs_calc:
-                            for stat in goal_cc_stats.split("|"):
-                                cc_name, stats = stat.split(":")
+                            if needs_calc:
+                                for stat in goal_cc_stats.split("|"):
+                                    cc_name, stats = stat.split(":")
 
-                                if cc_name in self.goal_ccs_dict[goal_id]:
-                                    index = self.goal_ccs_dict[goal_id].index(cc_name)
-                                    cc_stats_str += f"{cc_name}:{stats},{self.current_date} {self.line_edit_dict[goal_id][index].text()}|"
-                                else:
-                                    cc_stats_str += stat
-                                if cc_name == p_charact:
-                                    value += float(self.line_edit_dict[goal_id][index].text())
-                            cc_stats_str = cc_stats_str.rstrip("|")
-                        else:
-                            cc_stats_str = goal_cc_stats
+                                    if cc_name in self.goal_ccs_dict[goal_id]:
+                                        index = self.goal_ccs_dict[goal_id].index(cc_name)
+                                        cc_stats_str += f"{cc_name}:{stats},{self.current_date} {self.line_edit_dict[goal_id][index].text()}|"
+                                    else:
+                                        cc_stats_str += stat
+                                    if cc_name == p_charact:
+                                        value += float(self.line_edit_dict[goal_id][index].text())
+                                cc_stats_str = cc_stats_str.rstrip("|")
+                            else:
+                                cc_stats_str = goal_cc_stats
 
-                    DataManager.updateMainData("goal_characts", [cc_stats_str, f"{value}:{p_charact}", "completing", goal_id])
-                    if len(goal_id.split(".")) > 2:
-                        layers = goal_id.split(".")
-                        while len(layers) > 2:
-                            DataManager.recalculateValues(layers)
-                            supergoal_id = ".".join(layers[:-1])
-                            layers.pop(-1)
+                        DataManager.updateMainData("goal_characts", [cc_stats_str, f"{value}:{p_charact}", "completing", goal_id])
+                        if len(goal_id.split(".")) > 2:
+                            layers = goal_id.split(".")
+                            while len(layers) > 2:
+                                DataManager.recalculateValues(layers)
+                                supergoal_id = ".".join(layers[:-1])
+                                layers.pop(-1)
 
-            for task_id in self.records_dict:
-                DataManager.addSkillStat(task_id, self.records_dict[task_id] / 3600000, self.current_date)
+                for task_id in self.records_dict:
+                    DataManager.addSkillStat(task_id, self.records_dict[task_id] / 3600000, self.current_date)
 
-            DataManager.recalculateSkills()
-            parser = configparser.ConfigParser()
-            parser.read(user_config_path)
-            diary_path = parser.get("User", "diary_path")
+                DataManager.recalculateSkills()
+                parser = configparser.ConfigParser()
+                parser.read(user_config_path)
+                diary_path = parser.get("User", "diary_path")
 
-            if self.day_note.toPlainText():
-                ok = True
-                doc = None
-                while not doc and ok:
-                    if not diary_path:
-                        diary_path, _ = QFileDialog.getOpenFileName(self, "Select diary to save notes", filter="Text Files(*.txt *.docx)")
+                if self.day_note.toPlainText():
+                    ok = True
+                    doc = None
+                    while not doc and ok:
+                        if not diary_path:
+                            diary_path, _ = QFileDialog.getOpenFileName(self, "Select diary to save notes", filter="Text Files(*.txt *.docx)")
+                            if diary_path:
+                                parser.set("User", "diary_path", diary_path)
                         if diary_path:
-                            parser.set("User", "diary_path", diary_path)
-                    if diary_path:
-                        file_format = os.path.splitext(diary_path)[1]
-                        if file_format == ".txt":
-                            with open(diary_path, "a") as diary:
-                                diary.write(self.current_date + "\n" + self.day_note.toPlainText() + "\n")
-                            ok = False
-                        elif file_format == ".docx":
-                            try:
-                                doc = docx.Document(diary_path)
-                            except Exception:
-                                if not QMessageBox.question(self, "Error", "File not exists. If you're sure that it exists try to add some text in it. Do you want to try again?") == QMessageBox.StandardButton.Yes:
-                                    ok = False
-                                else:
-                                    diary_path = None
-                            if doc:
-                                text_lines = [self.current_date] + self.day_note.toPlainText().split("\n")
-                                for line in text_lines:
-                                    doc.add_paragraph(line)
-                                doc.save(diary_path)
+                            file_format = os.path.splitext(diary_path)[1]
+                            if file_format == ".txt":
+                                with open(diary_path, "a") as diary:
+                                    diary.write(self.current_date + "\n" + self.day_note.toPlainText() + "\n")
+                                ok = False
+                            elif file_format == ".docx":
+                                try:
+                                    doc = docx.Document(diary_path)
+                                except Exception:
+                                    if not QMessageBox.question(self, "Error", "File not exists. If you're sure that it exists try to add some text in it. Do you want to try again?") == QMessageBox.StandardButton.Yes:
+                                        ok = False
+                                    else:
+                                        diary_path = None
+                                if doc:
+                                    text_lines = [self.current_date] + self.day_note.toPlainText().split("\n")
+                                    for line in text_lines:
+                                        doc.add_paragraph(line)
+                                    doc.save(diary_path)
 
-            with open(user_config_path, "w") as config_file:
-                parser.write(config_file)
+                with open(user_config_path, "w") as config_file:
+                    parser.write(config_file)
                 
-            if self.date_combo.count() == 1:
-                self.close()
-            else:
-                self.date_combo.removeItem(self.date_combo.currentIndex())
-        else: 
-            QMessageBox.warning(self, "Fill all cells to save the form", "Fill all cells to save the form")
+                if self.date_combo.count() == 1:
+                    self.close()
+                else:
+                    self.date_combo.removeItem(self.date_combo.currentIndex())
+            else: 
+                QMessageBox.warning(self, "Fill all cells to save the form", "Fill all cells to save the form")
 
     def check_plan(self):
         time = 0
@@ -1783,8 +1777,9 @@ class Plans(QWidget):
         self.current_date = self.current_date - dt.timedelta(days=self.current_date.weekday())
         end_of_week = self.current_date + dt.timedelta(days=6)
         self.date_label = QLabel(f"{self.current_date.day}-{end_of_week.day} {self.months[self.current_date.month - 1]} {self.current_date.year}")
-        
         self.date_label.setFont(QFont("Calibri", 24, 700))
+        self.date_label.setToolTipDuration(-1)
+
         next_week_button = QPushButton()
         next_week_button.setFixedSize(18, 34)
         next_week_button.setIconSize(QSize(18, 34))
@@ -1854,7 +1849,25 @@ class Plans(QWidget):
         main_v_box.addStretch()
         main_v_box.setContentsMargins(1, 0, 0, 0)
         self.recalculate_time()
+        self.recalc_week()
         self.setLayout(main_v_box)
+
+    def recalc_week(self):
+        blocks_dict = self.week_plan_view.blocks_dict
+        tasks_dict = {}
+        for i in range(7):
+            for item in blocks_dict[i]:
+                time = ws.calculate_msecs(item.end_time) - ws.calculate_msecs(item.start_time)
+                if item.name in tasks_dict:
+                    tasks_dict[item.name] += time
+                else:
+                    tasks_dict[item.name] = time
+                    
+        tasks_tuple = [(task, time) for task, time in tasks_dict.items()]
+        sorted_tasks = sorted(tasks_tuple, key=lambda x: x[1], reverse=True)
+
+        text = "".join(f'<p>{item[0]}: {round(item[1] / 3600000, 2)} hours</p>' for item in sorted_tasks)
+        self.date_label.setToolTip(f"<font face='Calibri' size='4' color='#FFD300'>{text}</font>")
 
     def recalculate_time(self):
         blocks_dict = self.week_plan_view.blocks_dict
@@ -1892,6 +1905,7 @@ class Plans(QWidget):
     def update_plan(self, exceptItems=[]):
         self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day), exceptItems)
         self.update_labels()
+        self.recalc_week()
         
     def update_labels(self):
         self.recalculate_time()
@@ -1905,22 +1919,36 @@ class Plans(QWidget):
             week_day = week_day.addDays(1)
 
     def save_plan(self, *args, exceptItems=[]):
-        blocks_dict = self.week_plan_view.blocks_dict
-        blocks_list = []
-        for i in blocks_dict:
-            day = self.current_date + dt.timedelta(days=i)
-            DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
-            for block in blocks_dict[i]:
-                if block.task_id and block not in exceptItems:
-                    busy = ws.getBusyValue(block.task_id)
-                    blocks_list.append([block.start_time, block.end_time, block.task_id, day.strftime("%Y-%m-%d"), busy])
-        DataManager.saveMainData("Plans", blocks_list)
-        if not exceptItems:
-            self.changesSaved.emit()
+        colliding_blocks = self.week_plan_view.check_blocks()
+        if colliding_blocks:
+            QMessageBox.warning(self, "Time blocks are colliding", f"The following blocks are colliding: {', '.join([block.name for block in colliding_blocks])}")
+        else:
+            blocks_dict = self.week_plan_view.blocks_dict
+            blocks_list = []
+            for i in blocks_dict:
+                day = self.current_date + dt.timedelta(days=i)
+                DataManager.deleteMainData("Plans", day.strftime("%Y-%m-%d"))
+                for block in blocks_dict[i]:
+                    if block.task_id and block not in exceptItems:
+                        busy = ws.getBusyValue(block.task_id)
+                        blocks_list.append([block.start_time, block.end_time, block.task_id, day.strftime("%Y-%m-%d"), busy])
+            DataManager.saveMainData("Plans", blocks_list)
+            if not exceptItems:
+                self.changesSaved.emit()
 
     def saveData(self):
         if QMessageBox.question(self, "Unsaved changes", "Some changes were made. Save changes?") == QMessageBox.StandardButton.Yes:
             self.save_plan()
+            
+    def mouseDoubleClickEvent(self, event):
+        for label in self.day_labels:
+            if label.underMouse():
+                for block in self.week_plan_view.blocks_dict[self.day_labels.index(label)]:
+                    block.setSelected(True)
+                break
+        if self.date_label.underMouse():
+            self.week_plan_view.select_all()
+        return super().mouseDoubleClickEvent(event)
 
 class PhrasesEditor(QDialog):
     def __init__(self):
@@ -1977,8 +2005,7 @@ class PhrasesEditor(QDialog):
         self.phrases_om.selected.connect(self.phrase_selected)
 
     def edit_authors(self):
-        self.dialog1 = QDialog()
-        self.dialog1.setModal(True)
+        self.dialog1 = ws.ModalIconDialog()
         self.dialog1.setWindowTitle("Edit authors")
         self.author_image = ws.AddImageLabel(ring=True)
         self.name_edit = QLineEdit()
@@ -2082,6 +2109,8 @@ class Top12Tab(QWidget):
         self.tree_widget.setSortingEnabled(True)
         self.remove_act = QAction("Remove goal")
         self.remove_act.triggered.connect(self.remove_goal)
+        self.change_place_act = QAction("Change place")
+        self.change_place_act.triggered.connect(self.change_place)
         self.font = QFont("Calibri", 18, 700)
         self.tree_widget.setColumnWidth(0, 75)
         self.tree_widget.setColumnWidth(1, 120)
@@ -2094,6 +2123,9 @@ class Top12Tab(QWidget):
             goal_info = [goal[0], goal_info[1], goal_info[2], goal_info[4], goal[1]]
             self.add_item(goal_info, image_path)
 
+        self.tree_widget.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        self.tree_widget.resizeColumnToContents(2)
+        
         add_button = QPushButton()
         add_button.setIcon(QIcon(i_dir + "\Add icon.png"))
         add_button.setFixedSize(50, 50)
@@ -2122,8 +2154,7 @@ class Top12Tab(QWidget):
         if self.tree_widget.topLevelItemCount() == 12:
             QMessageBox.warning(self, "The list fully filled", "The list has maximum amount of goals")
         else:
-            self.dialog = QDialog()
-            self.dialog.setModal(True)
+            self.dialog = ws.ModalIconDialog()
             self.dialog.setMinimumHeight(150)
             self.dialog.setWindowTitle(f"Add top {self.tree_widget.topLevelItemCount() + 1} goal")
             self.goal_edit = QLineEdit()
@@ -2155,8 +2186,28 @@ class Top12Tab(QWidget):
         if isinstance(self.item, QTreeWidgetItem):
             self.menu = QMenu()
             self.menu.addAction(self.remove_act)
+            self.menu.addAction(self.change_place_act)
             self.menu.exec(event.pos())
 
     def remove_goal(self):
         self.tree_widget.takeTopLevelItem(self.tree_widget.indexOfTopLevelItem(self.item))
         DataManager.deleteOtherData("top goal", self.item.text(5))
+        
+    def change_place(self):
+        former_place = int(self.item.text(0))
+        place, ok = QInputDialog.getInt(self, "Set place", "Set place:", value=former_place, min=1, max=12)
+        if place and ok and place != former_place:
+            for i in range(self.tree_widget.topLevelItemCount()):
+                item = self.tree_widget.topLevelItem(i)
+                item_place = int(item.text(0))
+                if place < former_place:
+                    if item_place >= place and item_place < former_place:
+                        item.setText(0, str(int(item.text(0)) + 1))
+                else:
+                    if item_place <= place and item_place > former_place:
+                        item.setText(0, str(int(item.text(0)) - 1))
+            self.item.setText(0, str(place))
+        items = []
+        for i in range(self.tree_widget.topLevelItemCount()):
+            items.append(self.tree_widget.topLevelItem(i))
+        DataManager.saveOtherData("resave_top", items)

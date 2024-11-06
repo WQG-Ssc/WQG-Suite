@@ -116,6 +116,9 @@ QRadioButton::indicator::checked{
 QRadioButton::indicator::disabled{
     image: url(Files/icons/rb disabled.png)
     }
+QRadioButton::indicator::checked::disabled{
+    image: url(Files/icons/rb disabled checked.png)
+    }
 QRadioButton::disabled{
     color: gray
     }
@@ -186,7 +189,13 @@ QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal {
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
 }
-
+QToolTip{
+    background-color: #000000;
+    border: none;
+}
+QInputDialog QSpinBox{
+    color: #FFD300;
+}
 """
 #QScrollBar:horizontal{
 #    border: 1px solid #FFD300;

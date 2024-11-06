@@ -1,0 +1,68 @@
+<p><font face="Calibri" size="5" color="#FFD300">May 15, 2024. Version 1.1</font></p>
+<font face="Calibri" size="3" color="#FFFFFF">
+    <p><u>Upgrades:</u></p>
+    <ul>
+        <li>1. Added rounding of time value in the Form</li>
+        <li>2. Moved arrows for week switching before week name in Plans</li>
+        <li>3. Added ability to add same graphs in Statistics</li>
+        <li>4. Implemented 'Copy properties' function in Plans+</li>
+        <li>5. Goals in the dashboard are clickable now</li>
+        <li>6. Added ability to view tasks statistics</li>
+        <li>7. Added new actions for Time Blocks in Plans</li>
+        <li>8. Improved the appearance of scroll bars</li>
+        <li>9. Implemented sorting functionality in the skills tab</li>
+        <li>10. Time Blocks with different 'busy' value have different colors now</li>
+        <li>11. Modified some of the graphs type</li>
+        <li>12. Date selection in the Form added. Now it's more convenient to fill in forgotten to enter days.</li>
+        <li>13. Added the following shortcuts:
+            <ul>
+                <li>- Ctrl+S in the Goal window</li>
+                <li>- Ctrl+N (creates new goal/branch) in the Goals and the Branches</li>
+                <li>- Ctrl+G/S/B (filter selection) in the Object Manager (search bar)</li>
+                <li>- Ctrl+N, Ctrl+E (copy, paste name) in the Plans</li>
+                <li>- Ctrl+A (select all) in the Plans</li>
+                <li>- Ctrl+P (open/close plan) in the Time Manager</li>
+                <li>- Item selection by arrows in the Object Manager</li>
+            </ul>
+        </li>
+        <li>14. Added 'week info' in the Plans. It's visible on hovering mouse over week name.</li>
+        <li>15. Improved algorithm of saving large data (e.g., plans)</li>
+        <li>16. Changelog added</li>
+        <li>17. Fast selection in the Plans: you can select a day (week) by double-clicking on the day (week) name.</li>
+        <li>18. Business of tasks now shown by different colors of time blocks</li>
+        <li>19. Now it's possible to open time block settings of blocks from statistics</li>
+        <li>20. The Top 12 tab improved</li>
+        <li>21. Improved the appearance of 'recently completed' and 'completing' goals widgets</li>
+        <li>22. Added a time blocks collision check</li>
+        <li>23. If any changes have been made and you're trying to exit the app, a message box will appear</li>
+        <li>24. The background of the Plans made more intuitive</li>
+        <li>25. All dialogs have the app icon now</li>
+        <li>26. Some other small improvements</li>
+    </ul>
+    <p><u>Fixed bugs:</u></p>
+    <ul>
+        <li>1. Fixed multiple selection by right-clicking in the Plans</li>
+        <li>2. When a goal has been completed, the time of accomplishment doesn't show in the limit date</li>
+        <li>3. If a task is chosen in the time block dialog, it needs to be displayed in settings</li>
+        <li>4. For some reason, time values in Form and in plans are different</li>
+	<li>5. Some other small bugs</li>
+    </ul>
+</font>
+<p><font face="Calibri" size="5" color="#FFD300">December 25, 2023. Version 1.0.2</font></p>
+<font face="Calibri" size="3" color="#FFFFFF">
+    <p><u>Fixes:</u></p>
+    <ul>
+        <li>1. Work time in schedule is counted for 'busy' time</li>
+        <li>2. Fixed writing of busy value in time manager</li>
+        <li>3. Fixed statistics writing in Form: gap time were missing</li>
+        <li>4. If statistics are written to a goal in Form, the state of the goal will become 'completing'</li>
+        <li>5. Remove 'category' type of value of dynamic characteristics. Add ability to enter not only numeric values to static characteristics</li>
+        <li>6. If a phrase is chosen in the phrase editor, the date of it needs to be shown</li>
+        <li>7. If the quote ends with a space character, an error occurs</li>
+    </ul>
+    <p><u>Upgrades:</u></p>
+    <ul>
+        <li>1. If the quote is too long, the font will become smaller</li>
+        <li>2. Add rounding of skill values</li>
+    </ul>
+</font>

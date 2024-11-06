@@ -7,16 +7,6 @@ main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
 user_config_file = r"Files\config\user.ini"
 
-def exception_handler(func):
-    def wrapper(*args, **kwargs):
-        try: 
-            return func(*args, **kwargs)
-        except Exception as error:
-            print(f'An error occurred in {func.__name__}: {error}')
-            return False
-    return wrapper
-
-@exception_handler
 def loadMainData(data_type, *args, one=False):
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -107,7 +97,6 @@ def loadMainData(data_type, *args, one=False):
     conn.close()
     return data
 
-@exception_handler
 def saveMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -155,7 +144,6 @@ def saveMainData(data_type, args):
     conn.close()
     return True
 
-@exception_handler
 def updateMainData(data_type, args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -203,7 +191,6 @@ def updateMainData(data_type, args):
     conn.close()
     return True
 
-@exception_handler
 def deleteMainData(data_type, *args):
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -252,7 +239,6 @@ def deleteMainData(data_type, *args):
     conn.commit()
     conn.close()
 
-@exception_handler
 def loadOtherData(data_type, *args, one=False):
     conn = sql.connect(other_db)
     cur = conn.cursor()
@@ -284,7 +270,6 @@ def loadOtherData(data_type, *args, one=False):
     conn.close()
     return data
 
-@exception_handler
 def saveOtherData(data_type, *args):
     conn = sql.connect(other_db)
     cur = conn.cursor()
@@ -294,11 +279,14 @@ def saveOtherData(data_type, *args):
         cur.execute("INSERT INTO Authors (name, image) VALUES (?, ?)", args)
     if data_type == "top goal":
         cur.execute("INSERT INTO Top12 (goal_id) VALUES (?)", args)
+    if data_type == "resave_top":
+        cur.execute("DELETE FROM Top12")
+        for item in sorted(args[0], key=lambda x:x.text(0)):
+            cur.execute(f"INSERT INTO Top12 (goal_id) VALUES ('{item.text(5)}')")
 
     conn.commit()
     conn.close()
 
-@exception_handler
 def deleteOtherData(data_type, *args):
     conn = sql.connect(other_db)
     cur = conn.cursor()
@@ -325,7 +313,6 @@ def deleteOtherData(data_type, *args):
     conn.commit()
     conn.close()
     
-@exception_handler
 def updateOtherData(data_type, *args):
     conn = sql.connect(other_db)
     cur = conn.cursor()
@@ -334,7 +321,6 @@ def updateOtherData(data_type, *args):
     conn.commit()
     conn.close()
 
-@exception_handler
 def recalculateValues(layer):#Recalculates values of time, dynamic characteristics and skills of groups, then calls recalculateProgress() method to recalculate progress of the group
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -436,7 +422,6 @@ def recalculateValues(layer):#Recalculates values of time, dynamic characteristi
     conn.close()
     recalculateProgress(supergoal_id, progress.split(":")[1], True)
 
-@exception_handler
 def getGoalTree(goal_id):
     conn = sql.connect(main_db)
     cur = conn.cursor()
@@ -597,3 +582,9 @@ def listen():
     conn.close()
     server.close()
     return completed_tasks
+
+def isSubgoal(goal_id):
+    if len(goal_id.split(".")) > 2:
+        return True
+    else:
+        return False

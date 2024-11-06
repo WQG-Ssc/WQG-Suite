@@ -12,6 +12,7 @@ i_dir = r"Files\icons"
 user_config_path = r"Files\config\user.ini"
 main_db = r"Files\data\main.db"
 other_db = r"Files\data\other.db"
+changelog_path = r"Files\data\changelog.txt"
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -51,14 +52,14 @@ class MainWindow(QMainWindow):
 
     def initializeUI(self):
         self.setWindowTitle("WQG's Suite")
-        self.setWindowIcon(QIcon("Files\Icon.png"))
+        self.setWindowIcon(QIcon("Files\Small icon.png"))
         self.anyChangesMade = False
         self.isGoalListNeedsToBeUpdated = False
         self.dialog = None
         self.dialog1 = None
+        #self.showAnimation()
         self.setUpMainWindow()
         self.showMaximized()
-        #self.showAnimation()
 
     def showAnimation(self):
         self.dialog = ws.AnimationDialog()
@@ -298,7 +299,7 @@ class MainWindow(QMainWindow):
             self.tool_bar.show()
 
     def settings(self):
-        self.dialog = QDialog()
+        self.dialog = ws.ModalIconDialog()
         self.dialog.setWindowTitle("Settings")
         stat_edit_button = QPushButton("Edit statistics")
         stat_edit_button.clicked.connect(self.statistics_editor)
@@ -321,59 +322,19 @@ class MainWindow(QMainWindow):
         self.dialog.show()
 
     def show_changelog(self):
-        self.dialog1 = QDialog()
+        self.dialog1 = ws.ModalIconDialog()
+        self.dialog1.setWindowTitle("Changelog")
         changelog_label = QLabel('<font face="Calibri" size="6" color="#FFD300">Changelog</font>')
         changelog_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        changelog_text = QTextEdit("""
-            <p><font face="Calibri" size="5" color="#FFD300">25 December 2023 version: 1.0.2</font></p>
-            <font face="Calibri" size="3" color="#FFFFFF">
-                <p>Fixes:</p>
-                <ul>
-                    <li>1. Work time in schedule is counted for 'busy' time</li>
-                    <li>2. Fixed writing of busy value in time manager</li>
-                    <li>3. Fixed statistics writing in Form: gap time were missing</li>
-                    <li>4. If statistics are writed to a goal in Form, the state of the goal will become 'completing'</li>
-                    <li>5. Remove 'category' type of value of dynamic characteristics. Add ability to enter not only numeric values to static characts</li>
-                    <li>6. При выборе фразы в редакторе, дата должна вставлятся в редактор фраз</li>
-                    <li>7. If the quote ends with a space character, an error occurs</li>
-                </ul>
-                <p>Upgrades:</p>
-                <ul>
-                    <li>1. If the quote is too long, the font will become smaller</li>
-                    <li>2. Add rounding of skill values</li>
-                </ul>
-            </font>
-
-            <p><font face="Calibri" size="5" color="#FFD300">2024 version: 1.1</font></p>
-            <font face="Calibri" size="3" color="#FFFFFF">
-                <p>Fixes:</p>
-                <ul>
-                    <li>1. If a task is choose in time block dialog, it needs to be displayed in settings</li>
-                    <li>2. for some reason, time values in Form and in plans are different</li>
-                </ul>
-                <p>Upgrades:</p>
-                <ul>
-                    <li>1. Added rounding of time value in the Form </li>
-                    <li>2. Moved arrows for week swithcing before week name in Plans</li>
-                    <li>3. Added ability to add same graphs in Statistics</li>
-                    <li>4. Implemented 'Copy properties' function in Plans+</li>
-                    <li>5. Goals in the dashboard are clickable now+</li>
-                    <li>6. Added ability to view tasks statistics</li>
-                    <li>7. Added new actions for Time Blocks in Plans </li>
-                    <li>8. Improved the appearance of scroll bars</li>
-                    <li>9. Implemented sorting functionality in the skills tab</li>
-                    <li>10. Time Blocks with different 'busy' value have different colors now</li>
-                    <li>11. Modified some of the graphs type </li>
-
-                </ul>
-            </font>
-        """)
-        changelog_text.setReadOnly(True)
+        with open(changelog_path, "r") as file:
+            changelog_text = file.read()
+        changelog = QTextEdit(changelog_text)
+        changelog.setReadOnly(True)
         about_button = QPushButton("About the application")
         about_button.clicked.connect(self.show_about)
         v_box = QVBoxLayout()
         v_box.addWidget(changelog_label)
-        v_box.addWidget(changelog_text)
+        v_box.addWidget(changelog)
         v_box.addWidget(about_button)
         self.dialog1.setLayout(v_box)
         self.dialog1.show()
@@ -382,8 +343,7 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "About", """<p><font  "face="Calibri" size="7">WQG's Suite</font></p><p><font  "face="Calibri" size="4">version 1.1</font></p>""")
 
     def edit_profile(self):
-        self.dialog1 = QDialog()
-        self.dialog1.setModal(True)
+        self.dialog1 = ws.ModalIconDialog()
         parser = configparser.ConfigParser()
         parser.read(user_config_path, encoding="cp1251")
         name = parser.get("User", "Name")
@@ -426,9 +386,8 @@ class MainWindow(QMainWindow):
         self.dialog1 = wstabs.PhrasesEditor()
 
     def clear_db_dialog(self):
-        self.dialog1 = QDialog()
+        self.dialog1 = ws.ModalIconDialog()
         self.dialog1.setWindowTitle("Clear table")
-        self.dialog1.setModal(True)
         table_combo = QComboBox()
         table_combo.addItems(["Main_statistics", "Goals", "Skills", "Branches", "Days", "Graphs", "Characteristics", "Skills_statistics", "Tasks", "Plans"])
         clear_button = QPushButton("Clear")
@@ -543,6 +502,8 @@ class MainWindow(QMainWindow):
             self.dialog.close()
         if self.dialog1:
             self.dialog1.close()
+        if self.anyChangesMade:
+            self.stacked_widget.currentWidget().saveData()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
