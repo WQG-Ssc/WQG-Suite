@@ -264,7 +264,8 @@ class MainWindow(QMainWindow):
         line_edit.setStyleSheet("border-radius: 15px")
         line_edit.setPlaceholderText("Search object...")
         line_edit.setFont(QFont("Calibri", 18))
-        self.dialog.setMinimumSize(line_edit.sizeHint().width(), line_edit.sizeHint().height() + 200)
+        line_edit.resize(line_edit.sizeHint())
+        self.dialog.setMinimumSize(line_edit.width(), line_edit.height() + 200)
         
         obj_manager = ws.ObjectManager(self.dialog, line_edit)
         obj_manager.selected.connect(self.show_object)

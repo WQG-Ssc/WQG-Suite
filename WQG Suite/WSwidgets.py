@@ -1,7 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 import os, math, random, configparser
 import DataManager
-from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QMessageBox, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QButtonGroup, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem, QRadioButton, QTimeEdit
+from PyQt6.QtWidgets import QLabel, QFileDialog, QProgressBar, QToolButton, QVBoxLayout, QHBoxLayout, QWidget, QProgressBar, QPushButton, QListWidget, QMenu, QMessageBox, QDateEdit, QCalendarWidget, QDialog, QCheckBox, QLineEdit, QButtonGroup, QListWidgetItem, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem, QRadioButton, QTimeEdit
 from PyQt6.QtGui import QPixmap, QBitmap, QPainter, QPen, QBrush, QColor, QFont, QAction, QIcon, QFontMetrics, QPainterPath, QImage, QRegularExpressionValidator, QPolygonF
 from PyQt6.QtCore import QRectF, QRect, Qt, QSize, pyqtSignal, QDate, QTime, QUrl, QPoint, QPointF, QObject, QTimer, pyqtProperty, QEasingCurve, QPropertyAnimation, QRegularExpression
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -299,8 +299,6 @@ class TodayPhraseWidget(QWidget):
         parser.read(user_config_file)
         if parser.get("Data", "last_showed_phrase_date") == current_date:
             phrase_name = parser.get("Data", "last_showed_phrase")
-            print(f'phrase_name:{phrase_name}')
-            print(DataManager.loadOtherData("phrase author", phrase_name, one=True))
             author = DataManager.loadOtherData("phrase author", phrase_name, one=True)[0]
             
             image = DataManager.loadOtherData("author", author, one=True)
@@ -973,6 +971,7 @@ class ObjectManager(QWidget):
         self.select_act = QAction()
         self.select_act.setShortcuts(["Return", "Enter"])
 
+
         self.s_filter = [item for item in init_s_filter]
         self.load_data()
         self.searching = searching
@@ -988,8 +987,11 @@ class ObjectManager(QWidget):
         self.setParent(parent)
         self.setVisible(False)
         self.h = 200
-        
+
         goals_filter = QCheckBox()
+        goals_filter.stateChanged.connect(self.remove_completed)
+        goals_filter.setChecked(True)
+        goals_filter.setToolTip("Remove completed goals")
 
         goals_button = QPushButton()
         goals_button.setObjectName("Goals")
@@ -1027,11 +1029,19 @@ class ObjectManager(QWidget):
                     h_box.addWidget(button)
                     self.filters.addButton(button)
             self.filters.buttonToggled.connect(self.filter_search)
+            #h_box.addWidget(goals_filter)
             v_box.addLayout(h_box)
 
         self.s_filter = []
         self.setLayout(v_box)
-        
+
+    def remove_completed(self, state):
+        #Removes completed goals from the list
+        #Super-uneffective-and-strange-system
+
+        pass
+
+
     def move_selection(self, event):
         if event.key() == 16777237 and not self.list_widget.currentItem() and self.list_widget.count():
             self.list_widget.setCurrentRow(0)
@@ -1079,7 +1089,6 @@ class ObjectManager(QWidget):
                             if obj_type == "Goals":
                                 goal_id = self.goals_ids[self.data[obj_type].index(data)]
                                 item.goal_id = goal_id
-                                print()
                                 if DataManager.isSubgoal:
                                     parent_goal_id = ".".join(goal_id.split(".")[:2])
                                     parent_goal_data = DataManager.loadMainData("goal", parent_goal_id, one=True)
@@ -1726,7 +1735,6 @@ class WeekPlanView(QGraphicsView):
         item = self.itemAt(pos)
         if isinstance(item, TimeBlock):
             if len(self.scene.selectedItems()) == 1:
-                print(1)
                 self.scene.clearSelection()
             item.setSelected(True)
             self.menu = QMenu()

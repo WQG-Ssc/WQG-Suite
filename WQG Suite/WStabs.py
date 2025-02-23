@@ -1182,7 +1182,7 @@ class StatisticsTab(QWidget):
             elif graph_item.value_type == "%":
                 yaxis = "y3"
 
-            if color:
+            if color and graph_item.name != "Work time":
                 self.fig.add_trace(go.Scatter(x=graph_item.x, y=graph_item.y, name=graph_item.name, yaxis=yaxis, line=dict(color=color)))
             elif graph_item.value_mode == "All time":
                 self.fig.add_trace(go.Scatter(x=graph_item.x, y=graph_item.y, name=graph_item.name, yaxis=yaxis))
