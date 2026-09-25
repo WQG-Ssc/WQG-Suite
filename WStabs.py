@@ -1,6 +1,6 @@
 import statistics as stats
 import datetime as dt
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QVBoxLayout, QDialog, QListWidget, QListWidgetItem, QTreeWidget, QTreeWidgetItem, QGroupBox, QPlainTextEdit, QMenu, QInputDialog, QFileDialog, QDateEdit, QRadioButton, QButtonGroup, QCheckBox, QComboBox, QStackedWidget, QGraphicsPixmapItem, QSizePolicy
 from PyQt6.QtCore import Qt, QSize, QRegularExpression, pyqtSignal, QDate, QTime
 from PyQt6.QtGui import QIcon, QFont, QAction, QMouseEvent, QRegularExpressionValidator, QFontMetrics, QPixmap
 import plotly.graph_objs as go
@@ -1031,7 +1031,11 @@ class StatisticsTab(QWidget):
         legend_font_color='white')
 
         self.stats_view = ws.PlotlyViewer(self.fig)
-        self.stats_view.setFixedSize(1500, 825)
+        # This page stays in the shared stacked widget after it is closed.
+        # A fixed chart size therefore became a minimum size for every page,
+        # including Plans, and could make the maximized window exceed a screen.
+        self.stats_view.setMinimumSize(480, 320)
+        self.stats_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         graphs_label = QLabel("Graphs")
         graphs_label.setFont(QFont("Calibri", 24))
         self.graphs_list_widget = QListWidget()
@@ -1772,7 +1776,7 @@ class Plans(QWidget):
         self.date_edit_tool = ws.DateEditTool(False)
         self.date_edit_tool.dateChanged.connect(self.change_current_date)
         self.current_date = dt.date.today()
-        
+
         self.months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
         self.current_date = self.current_date - dt.timedelta(days=self.current_date.weekday())
         end_of_week = self.current_date + dt.timedelta(days=6)
@@ -1802,7 +1806,9 @@ class Plans(QWidget):
         self.day_labels = []
         self.time_labels = []
         days_h_box = QHBoxLayout()
-        days_h_box.addSpacing(115)
+        # Keep the seven headings in the same evenly sized lanes as the
+        # schedule columns.  A small leading gutter accounts for the time axis.
+        days_h_box.addSpacing(60)
         time_h_box = QHBoxLayout()
 
         recalc_time_button = QPushButton()
@@ -1811,10 +1817,10 @@ class Plans(QWidget):
         recalc_time_button.setObjectName("Tool")
         recalc_time_button.setFixedSize(17, 17)
         recalc_time_button.clicked.connect(self.recalculate_time)
-        time_h_box.addSpacing(50)
+        time_h_box.addSpacing(15)
         time_h_box.addWidget(recalc_time_button)
-        time_h_box.addSpacing(40)
-        
+        time_h_box.addSpacing(15)
+
         for n in range(7):
             label = QLabel(f"{self.months[week_day.month() - 1]} {week_day.day()}")
             label.setFont(QFont("Calibri", 20))
@@ -1822,9 +1828,9 @@ class Plans(QWidget):
             time_label.setFont(QFont("Calibri", 18))
             week_day = week_day.addDays(1)
             self.day_labels.append(label)
-            days_h_box.addWidget(label, alignment=Qt.AlignmentFlag.AlignHCenter)
+            days_h_box.addWidget(label, 1, alignment=Qt.AlignmentFlag.AlignHCenter)
             self.time_labels.append(time_label)
-            time_h_box.addWidget(time_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+            time_h_box.addWidget(time_label, 1, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         save_button = QPushButton()
         save_button.setIcon(QIcon(i_dir + r"/Tasks.png"))
@@ -1851,6 +1857,7 @@ class Plans(QWidget):
         self.recalculate_time()
         self.recalc_week()
         self.setLayout(main_v_box)
+        self.update()
 
     def recalc_week(self):
         blocks_dict = self.week_plan_view.blocks_dict
@@ -1862,7 +1869,7 @@ class Plans(QWidget):
                     tasks_dict[item.name] += time
                 else:
                     tasks_dict[item.name] = time
-                    
+
         tasks_tuple = [(task, time) for task, time in tasks_dict.items()]
         sorted_tasks = sorted(tasks_tuple, key=lambda x: x[1], reverse=True)
 
@@ -1901,12 +1908,12 @@ class Plans(QWidget):
             new_date = new_date - dt.timedelta(days=new_date.weekday())
         self.current_date = new_date
         self.update_plan()
-        
+
     def update_plan(self, exceptItems=[]):
         self.week_plan_view.changeWeek(QDate(self.current_date.year, self.current_date.month, self.current_date.day), exceptItems)
         self.update_labels()
         self.recalc_week()
-        
+
     def update_labels(self):
         self.recalculate_time()
         end_of_week = self.current_date + dt.timedelta(days=6)
@@ -1939,7 +1946,7 @@ class Plans(QWidget):
     def saveData(self):
         if QMessageBox.question(self, "Unsaved changes", "Some changes were made. Save changes?") == QMessageBox.StandardButton.Yes:
             self.save_plan()
-            
+
     def mouseDoubleClickEvent(self, event):
         for label in self.day_labels:
             if label.underMouse():

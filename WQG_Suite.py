@@ -151,11 +151,11 @@ class MainWindow(QMainWindow):
         plans_button.clicked.connect(self.plans_window)
 
         buttons_h_box = QHBoxLayout()
-        buttons_h_box.addSpacing(250)
+        #buttons_h_box.addSpacing(250)
         buttons_h_box.addWidget(statistics_button, alignment=Qt.AlignmentFlag.AlignHCenter)
-        buttons_h_box.addSpacing(150)
+        #buttons_h_box.addSpacing(150)
         buttons_h_box.addWidget(goals_button, alignment=Qt.AlignmentFlag.AlignHCenter)
-        buttons_h_box.addSpacing(150)
+        #buttons_h_box.addSpacing(150)
         buttons_h_box.addWidget(plans_button, alignment=Qt.AlignmentFlag.AlignHCenter)
         buttons_h_box.addStretch()
 
